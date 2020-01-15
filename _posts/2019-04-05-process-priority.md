@@ -1,31 +1,19 @@
 ---
-title: xv6 给 PCB 添加优先级
+title: 给 PCB 添加优先级
 ---
 
 1. 给 PCB （进程控制块）添加优先级属性
 
-   vim proc.h 
-
-   ```c
-   // Per-process state
-   struct proc {
-     uint sz;                     // Size of process memory (bytes)
-     pde_t* pgdir;                // Page table
-     char *kstack;                // Bottom of kernel stack for this process
-     enum procstate state;        // Process state
-     int pid;                     // Process ID
-     struct proc *parent;         // Parent process
-     struct trapframe *tf;        // Trap frame for current syscall
-     struct context *context;     // swtch() here to run process
-     void *chan;                  // If non-zero, sleeping on chan
-     int killed;                  // If non-zero, have been killed
-     struct file *ofile[NOFILE];  // Open files
-     struct inode *cwd;           // Current directory
-     char name[16];               // Process name (debugging)
-     int priority;                // Process priority (0-20); lower value, higher priority
-   };
+   ```shell
+vim proc.h
    ```
-
+   
+   在 `struct proc` 中添加一行
+   
+   ```c
+   int priority;      // Process priority (0-20); lower value, higher priority
+   ```
+   
 2. ps 实现
 
    实现 ps 系统调用用来查看我们的进程信息
@@ -58,7 +46,7 @@ title: xv6 给 PCB 添加优先级
    
    ```
 
-3. 修改 allocproc 给 priority 提供默认值
+3. 修改 `allocproc` 给 `priority` 提供默认值
 
    ```c
    found:
@@ -114,9 +102,9 @@ title: xv6 给 PCB 添加优先级
    }
    
    ```
-   
-   运行 foo 程序的时候你会看见僵尸进程，因为子进程没有运行完，占用着 PCB，而父母必须在进程表中等待，一旦检测到子进程结束，父进程将清除相应的 PCB。你可以在父进程结束前加 wait() 等待。
-   
+
+   运行 `foo` 程序的时候你会看见僵尸进程，因为子进程没有运行完，占用着 PCB，而父母必须在进程表中等待，一旦检测到子进程结束，父进程将清除相应的 PCB。你可以在父进程结束前加 wait() 等待。
+
 5. 修改进程的优先级
 
    修改优先级的函数

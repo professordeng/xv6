@@ -1,4 +1,4 @@
-[Archives](/) | [Resources](/resources)
+[Archives](/) | [Resources](/xv6-book/resources)
 
 ## List of Articles
 
