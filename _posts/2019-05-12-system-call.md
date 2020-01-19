@@ -48,7 +48,7 @@ main(){
    为了让应用程序能调用用户态入口函数 `getcpuid()`，需要在代码 `user.h` 中加入一行函数原型声明 
 
    ```c
-   int getcupid(void);
+   int getcpuid(void);
    ```
 
    该头文件应该被应用程序段源代码所使用，因为它声明了所有用户态函数的原型。除此之外所有标准 C 语言库的函数都不能使用，因为 `Makefile` 用参数 `-nostdinc` 禁止使用 `Linux` 系统的头文件，而且用 `-I	.` 指出在当前目录中搜索头文件。也就是说 `xv6` 系统中，并没有实现标准的 C 语言库。
@@ -70,13 +70,13 @@ main(){
 在系统调用公共入口 `syscall()` 中，`xv6` 将根据系统调用号进行分发处理。负责分发处理的函数 `syscall()`（定义于文件 `syscall.c`），分发依据是一个跳转表。我们需要这个修改跳转表，首先要在`syscall.c` 第 107 行中的分发函数表 `syscalls[]` 中加入
 
 ```c
-[SYS_getcpuid]   sys_getcpuid
+[SYS_getcpuid]   sys_getcpuid,
 ```
 
 也就是下标 22 对应的是 `sys_getcpuid()` 函数地址（后面我们会实现该函数）。其次，由于 `sys_getcpuid` 未声明，因此要在它前面（例如第 105 行后面的位置）加入如下内容用于指出该函数是外部符号。 
 
 ```c
-extern int sys_getcpuid();
+extern int sys_getcpuid(void);
 ```
 
 前面提到：当用户发出 22 号系统调用是通过 `getcpuid()` 完成的，其中系统调用号 22 是保存在寄存器 `eax` 的。因此 `syscall()` 系统调用入口代码可以通过 `proc->tf->eax` 获得该系统调用号，并保存在 `num` 变量中，于是 `syscalls[num]` 就是 `syscalls[22]` 也就是 `sys_getcpuid()`。下面是从 `syscall.c` 中截取的`syscall()` 函数。
@@ -117,18 +117,22 @@ syscall(void)
 
    ```c
    int
-   getcpuid(){
-     return cpunum();
+   getcpuid()
+   {
+     cli();              // 关中断
+     uint id = cpuid();  // cpuid() 必须在关中断环境下执行
+     sti();              // 重新打开中断
+     return id;
    }
    ```
 
 3. 为了让 `sysproc.c` 中的 `sys_getcpuid()` 能调用 `proc.c` 中的 `getcpuid()`，还需要在 `defs.h` 加入一行（在 112 行后面添加） 
 
    ```c
-   void  getcpuid(void);
+   int  getcpuid(void);
    ```
 
-   用作内核态代码调用 `getcpuid()` 时的函数原型。`defs.h` 定义了 `xv6` 几乎所有的内核数据结构和函数，也被几乎所有内核代码所包含。
+   这是用作内核态代码调用 `getcpuid()` 时的函数原型。`defs.h` 定义了 `xv6` 几乎所有的内核数据结构和函数，也被几乎所有内核代码所包含。
 
 ## 3. 验证新系统调用
 
@@ -140,7 +144,7 @@ syscall(void)
 #include "user.h"
 
 int
-main(int argc. char *argv[])
+main(int argc, char *argv[])
 {
     printf(1, "My CPU id is: %d\n", getcpuid());
     exit();
