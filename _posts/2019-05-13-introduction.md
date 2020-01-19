@@ -1,92 +1,148 @@
 ---
 title: xv6 概述
+date: 2019-04-09
 ---
 
-`xv6` 是 `Unix` 操作系统的一种简化实现，这里着重于研究代码的实现。
+`xv6` 是 `Unix` 操作系统的一种简化实现，因此 `xv6` 的基本概念和 `Unix` 同源。下面内容要求读者对 `Unix` 或 `Linux` 有基本的了解。因为我们着重于对这些概念的代码实现。如果不熟悉 `Unix`，建议先学习一下操作系统的知识和 `Linux/Unix` 的核心概念。学习过程中如有拓展有关 OS 开发的软硬件知识的疑问，可以在 [OSDev](https://wiki.osdev.org/) 网站上查找资料并参与讨论。
 
-下面先了解一下 `xv6` 所用到的启动扇区 `bootblock` 文件、内核代码 `kernel` 文件和磁盘影像文件。然后学习 `xv6` 进程管理与调度、内存管理、文件系统和设备的基本概念。
+下面先简单了解一下 `xv6` 所用到的启动扇区 `bootblock` 文件、内核代码 `kernel` 文件和磁盘镜像文件。然后学习 `xv6` 进程管理与调度、内存管理、文件系统和设备的基本概念。
 
-## 代码总览
+## 1. 代码总览
 
-查看汇编代码、C 头文件和 C 源代码。
+`xv6` 的源代码总量较小，利用 `ls` 命令可以查看 `xv6` 的头文件、C 语言源文件和汇编代码文件
 
 ```bash
-ls *.S
-ls *.h
-ls *.c
+➜  xv6-expansion git:(dev) ls *.S
+bootasm.S  entryother.S  entry.S  initcode.S  swtch.S  trapasm.S  usys.S
+➜  xv6-expansion git:(dev) ls *.c
+bio.c       file.c      ioapic.c  log.c     mp.c      sh.c         sysfile.c  usertests.c
+bootmain.c  forktest.c  kalloc.c  ls.c      picirq.c  sleeplock.c  sysproc.c  vm.c
+cat.c       fs.c        kbd.c     main.c    pipe.c    spinlock.c   trap.c     wc.c
+console.c   grep.c      kill.c    memide.c  printf.c  stressfs.c   uart.c     zombie.c
+echo.c      ide.c       lapic.c   mkdir.c   proc.c    string.c     ulib.c
+exec.c      init.c      ln.c      mkfs.c    rm.c      syscall.c    umalloc.c
+➜  xv6-expansion git:(dev) ls *.h
+asm.h   defs.h   file.h  memlayout.h  param.h      spinlock.h  traps.h  x86.h
+buf.h   elf.h    fs.h    mmu.h        proc.h       stat.h      types.h
+date.h  fcntl.h  kbd.h   mp.h         sleeplock.h  syscall.h   user.h
 ```
 
 另外还有一些辅助性的代码以及 `Makefile` 等编译有关的文件。
 
-## xv6 二进制代码与镜像
+## 2. 二进制代码与镜像
 
-二进制代码分为两部分，一个是启动扇区的代码 `bootblock` ，另一个是内核代码 `kernel` 。由于都是 `linux` 系统下使用 `gcc` 工具生成的代码，因此都是使用 `ELF` 格式的目标文件，可以用 `binutils` 工具查看和分析。
+`xv6` 二进制代码分为两部分：
 
-### 1. 启动扇区
+1. 是启动扇区的代码 `bootblock` 
+2. 内核代码 `kernel` 
 
- `x86 PC` 启动，执行主板上的 `BIOS` （Basic Input Output System），主要完成一些硬件自检的工作，然后读取第一个扇区（启动扇区 boot sector）的 512 字节数据到内存中，这 512 字节的代码就是我们熟知的 `bootloader` 。导入后 CPU 控制权由 BIOS 转交给 `bootloader` 。BIOS 会把 `bootloader` 导入到 `0x7c00` 开始的地方，然后把 PC 指针设成此地址，将控制权交给 `bootloader` 。
+由于都是 Linux 系统下使用 `gcc` 工具生成的代码，因此都是使用 `ELF` 格式的目标文件，可以用 `binutils` 工具查看和分析。
 
-`xv6` 系统的启动扇区的代码 `bootblock`  就是扮演上述 `bootloader` 的角色，它将继续负责将 `xv6` 的内核代码 `kernel` 装载到内存，并将控制权交给 `kernel` ，从而完成启动过程。
+### 2.1 启动扇区
 
-- 启动扇区的生成
+在  `x86 PC` 启动的时候，首先执行的代码是主板上的 BIOS （Basic Input Output System），主要完成一些硬件自检的工作。在这些工作做完之后，BIOS 会从启动盘里读取第一个扇区（启动扇区 boot sector）的 512 字节数据到内存中，这 512 字节的代码就是我们熟知的 `bootloader` 。在导入完成后 CPU 控制权由 BIOS 转交给 `bootloader` 。BIOS 会把 `bootloader` 导入到 `0x7c00` 开始的地方，然后把 PC 指针设成此地址，将控制权交给 `bootloader` 。
 
-  查看 `Makefile` 中的 `bootblock` 生成指令
+`xv6` 启动扇区的代码 `bootblock`  就是扮演上述 `bootloader` 的角色，它将继续负责将 `xv6` 的内核代码 `kernel` 装载到内存，并将控制权交给 `kernel` ，从而完成启动过程。
 
-- `bootblock.o`
+#### 启动扇区的生成
 
-  执行 `readelf -l bootblock.o` 查看段的情况。 `LOAD` 会被装入内存，长度为 `0x27c` （大于一个扇区的长度），装入地址为 `0x7c00` ，该地址是 PC 的 BIOS 决定的。 PC 启动后最先执行的是主板 BIOS 代码，它将启动扇区内容读入到内存的 `0x7c00` 位置，然后再跳转到启动代码的第一条指令。
+`xv6` 系统通过 `bootasm.S` 和 `bootmain.c` 生成 `bootblock.o` 目标文件后，再通过 `objcopy` 工具将其中的代码节 `.text` 抽取出来到 `bootblock` 文件中产生启动扇区。
 
-  在 `段节` 映射中，看到 00 段是由 `.text` 节和 `.eh_frame` 节构成的。其中 `.text` 会被拷贝到 `bootblock` 文件中，而 `.eh_frame` 节将会被丢弃。
+启动扇区 `bootblock` 的生成步骤包括编译、链接与定制。如下代码是 `Makefile` 中生成 `bootblock` 的部分：
 
-  ```bash
-  Elf 文件类型为 EXEC (可执行文件)
-  Entry point 0x7c00
-  There are 2 program headers, starting at offset 52
+```makefile
+bootblock: bootasm.S bootmain.c
+    $(CC) $(CFLAGS) -fno-pic -O -nostdinc -I. -c bootmain.c
+    $(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c bootasm.S
+    $(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 -o bootblock.o bootasm.o bootmain.o
+    $(OBJDUMP) -S bootblock.o > bootblock.asm
+    $(OBJCOPY) -S -O binary -j .text bootblock.o bootblock
+    ./sign.pl bootblock
+```
+
+其中变量 `CC` 是编译器，`LD` 是链接器、`OBJDUMP` 是 `objdump` 工具、`OBJCOPY` 是 `objcopy` 工具。
+
+编译中使用了 `-nostdinc` 参数，编译器将不在系统头文件路径下搜索。这是因为 `xv6` 并没有实现标准 C 语言库，由 `-I.` 指出当前路径为头文件搜索路径，可以找到例如 `xv6` 内核头文件 `defs.h` 等。
+
+#### bootblock.o
+
+执行 `readelf -l bootblock.o` 查看段的情况，内容如下
+
+```bash
+Elf file type is EXEC (Executable file)
+Entry point 0x7c00
+There are 2 program headers, starting at offset 52
+
+Program Headers:
+  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align
+  LOAD           0x000074 0x00007c00 0x00007c00 0x0027c 0x0027c RWE 0x4
+  GNU_STACK      0x000000 0x00000000 0x00000000 0x00000 0x00000 RWE 0x10
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     .text .eh_frame 
+   01     
+```
+
+可以看到启动扇区 `bootblock.o` 只有编号为 00 段的类型为 `LOAD`，表示该段需要装入内存，长度为 `0x0027c` （大于一个扇区的长度），装入地址为 `0x7c00` ，该地址是 PC 的 BIOS 决定的。 PC 启动后最先执行的是主板 BIOS 代码，它将启动扇区内容读入到内存的 `0x7c00` 位置，然后再跳转到启动代码的第一条指令。
+
+在 `Section to Segment mapping` 下，看到 00 段是由 `.text` 节和 `.eh_frame` 节构成的。其中 `.text` 会被拷贝到 `bootblock` 文件中，而 `.eh_frame` 节将会被丢弃。
+
+既然只有 `.text` 有用，我们继续用 `readelf -S bootblock.o` 查看 `bootblock.o` 的节的信息。可以看到 `.text` 是 `bootblock.o` 的代码，位于 `bootblock.o` 文件的 `0x74` 字节偏移的位置，大小为 `0x1c0` ，`Adrr` 列指出装入地址为 `0x7c00` （与 BIOS 约定相一致）。从 `Flg` 标志可以看出需要在内存分配空间（A）、访问权限为可执行（X），可写（W）。我们不关心其中有关异常处理的 `.eh_frame` 节，因为启动时有异常也没什么可以处理的。
+
+```bash
+There are 13 section headers, starting at offset 0x1220:
+
+Section Headers:
+  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            00000000 000000 000000 00      0   0  0
+  [ 1] .text             PROGBITS        00007c00 000074 0001c0 00 WAX  0   0  4
+  [ 2] .eh_frame         PROGBITS        00007dc0 000234 0000bc 00   A  0   0  4
+  [ 3] .comment          PROGBITS        00000000 0002f0 00002b 01  MS  0   0  1
+  [ 4] .debug_aranges    PROGBITS        00000000 000320 000040 00      0   0  8
+  [ 5] .debug_info       PROGBITS        00000000 000360 00050b 00      0   0  1
+  [ 6] .debug_abbrev     PROGBITS        00000000 00086b 0001e3 00      0   0  1
+  [ 7] .debug_line       PROGBITS        00000000 000a4e 00012c 00      0   0  1
+  [ 8] .debug_str        PROGBITS        00000000 000b7a 0001dd 01  MS  0   0  1
+  [ 9] .debug_loc        PROGBITS        00000000 000d57 00022a 00      0   0  1
+  [10] .symtab           SYMTAB          00000000 000f84 0001a0 10     11  18  4
+  [11] .strtab           STRTAB          00000000 001124 00007c 00      0   0  1
+  [12] .shstrtab         STRTAB          00000000 0011a0 00007f 00      0   0  1
+Key to Flags:
+  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
+  L (link order), O (extra OS processing required), G (group), T (TLS),
+  C (compressed), x (unknown), o (OS specific), E (exclude),
+  p (processor specific)
+
+```
+
+#### bootblock
+
+从 `Makefile` 中的 `bootblock` 的生成规则可知，它先通过 `objcopy` 将 `bootblock.o` 其中的 `.text` 节拷贝到 `bootblock` 中（此时长度为 448 字节，小于一个扇区）。然后再通过 `sign.pl` 的一个 `perl` 脚本规整为一个磁盘扇区的 512 字节大小，并将最后两个字节填写上 `0x55` 和 `0xaa`。`sign.pl` 代码如下：
+
+```perl
+#!/usr/bin/perl 
   
-  程序头：
-    Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align
-    LOAD           0x000074 0x00007c00 0x00007c00 0x0027c 0x0027c RWE 0x4
-    GNU_STACK      0x000000 0x00000000 0x00000000 0x00000 0x00000 RWE 0x10
-  
-   Section to Segment mapping:
-    段节...
-     00     .text .eh_frame 
-     01 
-  ```
+open(SIG, $ARGV[0]) || die "open $ARGV[0]: $!";       # 打开命令行参数指出的文件
 
-  既然只有 `.text` 有用，我们继续用 `readelf -S bootblock.o` 查看 `bootblock.o` 的节的信息。可以看到 `.text` 的偏移地址 `0x74` ，大小为 `0x1c0` ，装入地址为 `0x7c00` （与 BIOS 约定一致）。从 `FLG` 标志可以看出需要在内存分配空间（A）、访问权限为可执行（X），可写（W）。我们不关心其中有关异常处理的 `.eh_frame` 节，因为启动时有异常也没什么可以处理的。
+$n = sysread(SIG, $buf, 1000);                  # 读入 1000 字节到 buf 中
 
-  ```bash
-  There are 13 section headers, starting at offset 0x1220:
-  
-  节头：
-    [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
-    [ 0]                   NULL            00000000 000000 000000 00      0   0  0
-    [ 1] .text             PROGBITS        00007c00 000074 0001c0 00 WAX  0   0  4
-    [ 2] .eh_frame         PROGBITS        00007dc0 000234 0000bc 00   A  0   0  4
-    [ 3] .comment          PROGBITS        00000000 0002f0 000029 01  MS  0   0  1
-    [ 4] .debug_aranges    PROGBITS        00000000 000320 000040 00      0   0  8
-    [ 5] .debug_info       PROGBITS        00000000 000360 00050b 00      0   0  1
-    [ 6] .debug_abbrev     PROGBITS        00000000 00086b 0001e3 00      0   0  1
-    [ 7] .debug_line       PROGBITS        00000000 000a4e 00012c 00      0   0  1
-    [ 8] .debug_str        PROGBITS        00000000 000b7a 0001dd 01  MS  0   0  1
-    [ 9] .debug_loc        PROGBITS        00000000 000d57 00022a 00      0   0  1
-    [10] .symtab           SYMTAB          00000000 000f84 0001a0 10     11  18  4
-    [11] .strtab           STRTAB          00000000 001124 00007c 00      0   0  1
-    [12] .shstrtab         STRTAB          00000000 0011a0 00007f 00      0   0  1
-  Key to Flags:
-    W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
-    L (link order), O (extra OS processing required), G (group), T (TLS),
-    C (compressed), x (unknown), o (OS specific), E (exclude),
-    p (processor specific)
-  
-  ```
+if($n > 510){                                  # 如果读入字节数大于 510
+  print STDERR "boot block too large: $n bytes (max 510)\n"; # 提示超过一个扇区
+  exit 1;                      
+}
 
-- `bootblock`
+print STDERR "boot block is $n bytes (max 510)\n"; # 打印提示: 启动扇区有效字节数
 
-  从 `makefile` 中的 `bootblock` 的生成规则可知，它先通过 `objcopy` 将 `bootblock.o` 其中的 `.text` 节拷贝到 `bootblock` 中，然后利用 `sign.pl` 脚本归整为一个磁盘扇区的 512 字节大小。
+$buf .= "\0" x (510-$n);           
+$buf .= "\x55\xAA";     # 最后两个字节填入 0x55、0xaa
 
-### 2. 内核代码
+open(SIG, ">$ARGV[0]") || die "open >$ARGV[0]: $!";
+print SIG $buf;                 # 将缓冲区内容写回文件
+close SIG;
+```
+
+### 2.2 内核代码
 
 `bootblock` 的主要任务就是将 `xv6` 内核 `kernel` 文件读入，并将控制权转交给 `kernel` 代码，从而运行 `xv6` 代码，从而运行 `xv6` 操作系统。`kernel` 代码本身又包括主体代码和辅助初始化代码两部分。
 
