@@ -132,5 +132,21 @@ syscall(void)
 
 ## 3. 验证新系统调用
 
+最后，我们需要验证新增系统调用是否能被应用程序所正常使用。由于前面已经在 `user.h` 中声明了 `getcpuid()` 用户态函数原型，因此可以在应用程序中进行调用。新建 `pcpuid.c`，内容如下：
 
+```c
+#include "types.h"
+#include "stat.h"
+#include "user.h"
 
+int
+main(int argc. char *argv[])
+{
+    printf(1, "My CPU id is: %d\n", getcpuid());
+    exit();
+}
+```
+
+参照前面第 2 节实验，完成其编译过程、加入到磁盘文件系统（记得在 `Makefile` 的 `UPROGS` 目标加上`_pcpuid`）。
+
+进入 `xv6`，运行 `pcpuid` 得到处理器编号。
