@@ -154,3 +154,25 @@ main(int argc, char *argv[])
 参照前面第 2 节实验，完成其编译过程、加入到磁盘文件系统（记得在 `Makefile` 的 `UPROGS` 目标加上`_pcpuid`）。
 
 进入 `xv6`，运行 `pcpuid` 得到处理器编号。
+
+## 4. 观察调度过程
+
+在本章结束之前，我们再编写一个程序，使得它可以创建多个进程并发运行，用于观察多进程分时运行的现象。创建 `fork.c` 文件，内容如下：
+
+```CQL
+#include "types.h"
+#include "stat.h"
+#include "user.h"
+
+int 
+main(){
+	int i;
+    printf(1, "My pid = %d\n", getpid()); // 1 是文件描述符，后面会提到
+	i = fork();
+    i = fork();
+    while(1)  i++;
+    exit();
+}
+```
+
+安装第 2 节我们重新在磁盘文件系统中增加 `fork` 程序，运行后间断性地键入 `Ctrl+p` 用于显示当时的进程状态。可以观察到进程的状态在 `run` 和 `runable` 之间切换，而且同时 `run` 的进程个数有时候不一致。当只有一个进程的状态为 `run` 时，说明另一个 CPU 正在运行 `scheduler` 执行流。
