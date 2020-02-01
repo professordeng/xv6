@@ -95,18 +95,7 @@ BIOS 在执行的时候会打开中断，但这时 BIOS 已经不执行了，所
 
 我们用 `b start` 将断点设置在 `bootblock` 的第一条指令，并用 `c` 命令执行到该断点，检查看到 `cs=0x0`、`eip=0x7c00`。此时正是 BIOS 刚跳转到 `bootblock` 的第一条指令而将控制权转交给 `bootblock` 的时刻。 
 
-到保护模式后，`gdb` 因权限不够而无法读写 `gdt` 等寄存器。此时需要用 `qemu` 的调试功能，我们需要将 `xv6` 默认的 `Makefile` 做一点小修改，将其中 `qemu-nox-gdb` 目标的规则修改成：
-
-```makefile
-emu-gdb: fs.img xv6.img .gdbinit
-        @echo "*** Now run 'gdb'." 1>&2
-#       $(QEMU) -serial mon:stdio $(QEMUOPTS) -S $(QEMUGDB)
-        $(QEMU) -monitor stdio $(QEMUOPTS) -S $(QEMUGDB)
-```
-
-然后运行 `make qemu-gdb`，此时在 shell 窗口中的内容和之前不同，出现了 `qemu` 命令提示。
-
-接着就在此窗口下输入命令 `info registers`，可以将整个系统的全部寄存器信息打印出来。（后面有练习要求读者调试跟踪到保护模式代码处，并检查相应的程序段描述符信息）。
+到保护模式后，`gdb` 因权限不够而无法读写 `gdt` 等寄存器。此时需要用 `qemu` 的调试功能，在 `qemu` 终端执行 `Ctrl + A`，再执行 `c`，即可进入 `qemu` 的 `monitor` 模式（在此模式下按 `q` 退出），接着输入 `info registers`，可以将整个系统的全部寄存器信息打印出来。（后面有练习要求读者调试跟踪到保护模式代码处，并检查相应的程序段描述符信息）。
 
 ### 2.4 代码回顾
 
