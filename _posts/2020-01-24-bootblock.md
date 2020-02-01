@@ -70,18 +70,45 @@ BIOS 在执行的时候会打开中断，但这时 BIOS 已经不执行了，所
 
 进入保护模式后，第 55~62 行代码是设置各个段的索引，可以看到 `ds`、`es`、`ss` 三个选择字都索引到了数据段（编号为 2 的 `SEG_KDATA` 段），`fs` 和 `gs` （GS 段后面会被用作 “每 CPU 变量”（`cpu` 和 `proc`）的特殊段）选择字则指向无效段（编号为 0 的 `SEGNULLASM`）。启动保护模式后的代码段和数据段都映射到 `0~0xffffffff` 的线性地址范围。通过这样的设置使得 `xv6` 可以无视分段机制的地址映射问题，将逻辑地址和线性地址等效地使用。也就是说无论是用 `cs` 的取指令、`ds/es` 的访问数据或用 `ss` 的访问堆栈，段的起点都是 0，起关键作用的是各自相应的段内偏移地址。 
 
+- 段寄存器设置为 0，32 位地址空间的布局如下
+
+| 地址          | 描述               |
+| ------------- | ------------------ |
+| `0x0000`      | 起始地址           |
+| `0x7c00`      | 启动扇区的起始地址 |
+| `0x7d00`      | 启动扇区的结束地址 |
+| `0xffff-ffff` | 结束地址           |
+
 然后 `bootasm.S` 的第 65 行设置堆栈指针 `esp` 为 `$start`（即 `bootblock` 的第一行代码位置，定义在 `bootasm.S` 的第 11 行），由于 BIOS 将 `bootblock` 装载到 `0x7c00` 地址处，也就是说 `start` 地址就是 `0x7c00`，由于 `bootblock` 只站 1 个扇区共 512 字节，因此占用地址空间为 `0x7c00~0x7d00`。然后跳到 C 代码执行 `bootmain()`，`bootblock` 的汇编部分至此结束。
 
 正常执行 `bootmain()` 是不可能返回的，因此如果执行到了 `bootasm.S` 第 70 行的代码，则说明系统出错了，例如后面 `bootmain()` 读入磁盘数据后发现不是 ELF 格式（即没有发现有效的内核）。这些代码执行两个 `outw` 指令的 IO 操作，向 `0x8a00` 端口写入数据从而引发 `Bochs` 虚 拟机的 `breakpoint`（真实机器在 `0x8a00` 地址只是普通内存没有任何特定作用），然后进入无限循环。 
 
 至此，结束了  `bootasm.S` 中汇编代码的分析，开始第二步骤 C 语言的 `bootmain()` 代码运行阶段。
 
-### 2.3 调试 bootblock
+### 2.3 调试
 
 由于 `xv6` 的默认设置中，其 `gdb` 初始化脚本 `.gdbinit` 的最后一行的命令指出所使用的符号表是 `kernel`，因此是无法处理 `bootblock` 的代码和符号的。 
 
 因此我们由两种方法解决：一是将最后的一行从 `symbol-file kernel` 修改为 `symbol-file bootblock.o` 或 `file bootblock.o`；二是直接在 `gdb` 启动后执行 `file bootblock.o` 命令，替换调试目标程序以及符号表。 
 
-此时再执行 `gdb` 调试，可以查看 `bootblock` 的信息。我们执行 `l start` 查看 `bootblock` 最初的几条指令，并用 `p` 命令查看到 `cs=0xf000`、`eip=0xfff0`，正处于 PC 还未执行 BIOS 的时候。 
+此时再执行 `gdb` 调试，可以查看 `bootblock` 的信息。我们执行 `l start` 查看 `bootblock` 最初的几条指令，并用 `p/x $cs` 查看到 `cs=0xf000`，用 `p/x $eip` 查看到 `eip=0xfff0`，正处于 PC 还未执行 BIOS 的时候。 
 
 我们用 `b start` 将断点设置在 `bootblock` 的第一条指令，并用 `c` 命令执行到该断点，检查看到 `cs=0x0`、`eip=0x7c00`。此时正是 BIOS 刚跳转到 `bootblock` 的第一条指令而将控制权转交给 `bootblock` 的时刻。 
+
+到保护模式后，`gdb` 因权限不够而无法读写 `gdt` 等寄存器。此时需要用 `qemu` 的调试功能，我们需要将 `xv6` 默认的 `Makefile` 做一点小修改，将其中 `qemu-nox-gdb` 目标的规则修改成：
+
+```makefile
+emu-gdb: fs.img xv6.img .gdbinit
+        @echo "*** Now run 'gdb'." 1>&2
+#       $(QEMU) -serial mon:stdio $(QEMUOPTS) -S $(QEMUGDB)
+        $(QEMU) -monitor stdio $(QEMUOPTS) -S $(QEMUGDB)
+```
+
+然后运行 `make qemu-gdb`，此时在 shell 窗口中的内容和之前不同，出现了 `qemu` 命令提示。
+
+接着就在此窗口下输入命令 `info registers`，可以将整个系统的全部寄存器信息打印出来。（后面有练习要求读者调试跟踪到保护模式代码处，并检查相应的程序段描述符信息）。
+
+### 2.4 代码回顾
+
+此时我们已经对 `bootasm.S` 的代码已经有了完整的了解。其中的第11行定义了一个全局变量 `start`，即 `xv6` 的第一条指令 `cli` 的地址。第 54 行的 `start32` 开始进入保护模式代码，并通过设置段寄存器构造出 `0~0xffff-ffff` 的线性地址范围。最后通过 66 行的 `call bootmain` 跳入到 `bootmain.c` 中的 `bootmain()` 函数。正常情况是不会从 `bootmain()` 返回的，在 `call bootmain` 之后的代码对应于异常情况。 
+
