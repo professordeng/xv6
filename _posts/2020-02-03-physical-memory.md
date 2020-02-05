@@ -39,7 +39,7 @@ date: 2019-05-03
 | -------------- | ------------------------- | ------------------------- |
 | 内核占用的内存 | `kinit1()` 收集的空闲内存 | `kinit2()` 收集的空闲内存 |
 
- ### 2.2 kalloc.c 和 mmu.h
+### 2.2 kalloc.c 和 mmu.h
 
 [kalloc.c](https://github.com/professordeng/xv6-expansion/blob/master/kalloc.c) 中有刚讨论过的物理内存初始化的 `kinit1()` 和 `kinit2()`，以及页帧分配 `kalloc()` 和回收 `kfree()` 等函数。[mmu.h](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h) 中则有大量关于页表映射相关的常量、宏和函数。
 
