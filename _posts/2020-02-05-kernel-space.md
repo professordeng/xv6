@@ -71,3 +71,43 @@ date: 2019-05-05
 
 而 Linux 也采用了类似的实现方式，体现了软件对硬件体系结构的灵活应用。早期 Linux 内核有进程最大数的限制（受限于 `GDT` 表项的数量），受限制的原因是每一个进程都有自已的 `TSS` 和 `LDT`，而 `TSS`（任务描述符）和 `LDT`（私有描述符）必须放在 `GDT` 中，`GDT` 最大只能存放 8192 个描述符。从 `Linux 2.4` 以后，全部进程使用同一个 `TSS`，准确的说是每个 CPU 一个 `TSS`， 在同一个 CPU 上的进程使用同一个 `TSS`。`Linux 2.4` 以后的内核不再使用硬切换，而是使用软切换。寄存器不再保存在 `TSS` 中了，而是保存在 `task->thread` 中，只用 `TSS` 的 `esp0` 和 `IO` 许可位图。所以，在进程切换过程中，只需要更新 `TSS` 中的 `esp0`、`io bitmap`。任务切换（硬切换）需要用到 `TSS` 来保存全部寄存器（`2.4` 以前使用 `jmp` 来实现切换）。
 
+## 3. 相关代码
+
+### 3.1 vm.c
+
+`vm.c` 包含了内核空间和用户空间的管理代码，包括初始化操作和运行时的操作。 
+
+### 3.2 mmu.h
+
+`mmu.h` 是与虚存地址管理相关的信息、CPU 现场 `taskstate` 以及 `x86` 的门描述符。
+
+ #### 内存地址相关代码
+
+[mmu.h#L4](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L4) 定义了 EFLAGS 标志寄存器的各个标志位。[mmu.h#L7](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L7) 定义了 `CR0` 控制寄存器各个控制位。[mmu.h#L12](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L12)  定义了 `CR4` 控制寄存器的 `PSE` 位。 
+
+[mmu.h#L14](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L14) 给出了 `xv6` 所使用的段的编号，内核代码段 `SEG_KCODE=1`，内核数据段 `SEG_KDATA=2`，用户代码段 `SEG_UCODE=3`，用户数据段 `SEG_UDATA=4`，任务状态段 `SEG_TSS=5`。包括段 `0`，一共有 `NSEGS=6` 个段。上述段的编号、名称和用途总结如下表。
+
+| 段号 | 名称        | 用途       |
+| ---- | ----------- | ---------- |
+| 0    |             | 无效       |
+| 1    | `SEG_KCODE` | 内核代码段 |
+| 2    | `SEG_KDATA` | 内核数据段 |
+| 3    | `SEG_UCODE` | 用户代码段 |
+| 4    | `SEG_UDATA` | 用户数据段 |
+| 5    | `SEG_TSS`   | 任务状态段 |
+
+[mmu.h#L24](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L24) 定义了段描述符 `segdesc` 结构体。 
+
+[mmu.h#L42](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L42) 定义了两个宏，用于按指定要求生成段描述符的变量声明。 
+
+[mmu.h#L55](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L55) 给出了用户段的类型标志位和系统段的类型标志位。[mmu.h#L65](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L65) 给出了虚地址的页目录索引、页表索引和页内偏移的划分情况，以及用于获取虚地址页目录索引的 `PDX()` 和页表索引的 `PTX()`。[mmu.h#L82](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L82) 定义了页表相关的几个常量。[mmu.h#L99](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L99) 的两个宏分别用于获取虚地址的页索引号 `PTE_ADDR(pte)` 和页的访问标记 `PTE_FLAGS(pte)`。 
+
+地址操作的宏总结为以下几个： 
+
+1. `PDX` 宏用于取得虚地址的页目录索引值。
+2. `PTX` 宏用于获得虚地址的页表索引值。 
+3. `PGADDR` 宏根据虚地址的目录索引、页表索引和页内偏移来构建虚拟地址的值。
+4. `PTE_ADDR(pte)` 取得 `pte` 高 20 位（对应的页帧的物理地址）。
+5. `PTE_FLAGS(pte)` 取得 `pte` 低 12 位（对应页访问标记）。
+
+[mmu.h#L106](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L106) 给出了任务状态段 `TSS` 所对应的结构体 `taskstate`。[mmu.h#L147](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L147) 给出了中断和陷阱对应的门描述符（`gatedesc` 结构体）的描述。[mmu.h#L160](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L160) 的 `SETGATE` 宏则用于定制门描述符。 如果没有定义汇编 `__ASSEMBLER__` 则 [mmu.h#L55](https://github.com/professordeng/xv6-expansion/blob/master/mmu.h#L55) 和 [asm.h#L16](https://github.com/professordeng/xv6-expansion/blob/master/asm.h#L16) 重复。
