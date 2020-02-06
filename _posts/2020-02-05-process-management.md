@@ -75,3 +75,48 @@ date: 2019-06-01
 
 ### 2.2 第一个进程 initcode
 
+在 `xv6` 启动过程中 `main()->userinit()` 创建第一个用户态进程 `initcode`。`userinit()` 见 [proc.c#L118](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L118)，它将完成第一个用户进程 `init` 的创建工作。这个进程镜像很快随着 `initcode` 的执行而通过 `SYS_exec` 系统调用替换成磁盘上的 `/init` 进程影像，启动 `sh` 程序（如果 `sh` 程序结束，则再生成一个 `sh`）。 
+
+首先 [proc.c#L126](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L126) 内存管理部分刚讨论过的 `allocproc()`，分配一个空闲的 PCB 并初始化相应的内核堆栈，并使用专门的全局变量 `initproc` 来记录这个进程。然后 [proc.c#L129](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L129) 通过 `setupkvm()` 给 `init` 进程创建初始页表，由于只映射了内核空间因此函数名使用 `kvm`（`kernel vm`），因此还没有用户态页表（不能访问用户态空间）。由于代码很短，只需要一个页就将代码数据和堆栈包含了，因此 `p->sz = PGSIZE`。
+
+接着通过 `inituvm()` 完成用户空间的建立，由于 `init` 的代码已经在内核镜像 `kernel` 中，随着启动过程装载到 `_binary_initcode_start` 地址，因此只需要新分配一个页帧，然后将该页帧映射到 0 地址，再将 `init` 代码拷贝到该地址即可。
+
+然后 [proc.c#L133](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L133)，自行（而不是因中断）设置了一个 `trapframe` 结构 `p->tf`，造成等效于 “好像曾经” 从用户态经过中断而形成的 `trapframe`，也就是说一旦利用这个 `trapframe` 进行 `iret` 返回就会返回到设定好的 `init` 进程用户态断点处（伪造出来的断点），即 `eip` 指向的 0 地址，正是 `initcode` 的第一条指令位置。从这里可以看出，`xv6` 的进程布局与 Linux 安排不同，Linux 的进程入口第一条指令在 `0x40000` 附近。 
+
+最后设置进程名 `p->name` 为 `initcode`、修改当前工作目录为 `/` 并将进程调度状态设置为 `RUNNABLE`（就绪）。 
+
+创建 `init` 进程的过程和 `fork()` 函数完成的操作有一些相似的地方，但是 `init` 进程由于是第 一个进程，无法通过拷贝的方法来创建进程的内存镜像。
+
+ ### 2.3 fork 
+
+除了第一个进程外，其他进程都需要通过 `fork` 系统调用来产生。[proc.c#L177](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L177) 的 fork() 实现了 Unix 概念中的子进程创建操作。类似创建 `init` 进程，首先需要 `allocproc()` 分配空闲的 PCB 记录在 `np` 变量中。 
+
+然后 `copyuvm()` 拷贝父进程镜像作为子进程镜像（含内核空间和用户空间），子进程镜像本质上就是页表的设置 `np->pgdir`。然后复制进程空间大小 `np->sz=proc->sz`（这个 `proc` 变量是 CPU 私有变量，指向当前在运行的那个进程，即父进程）。设置父进程 `np->parent=proc` 为当前进程。任务状态段也进行复制 `*np->tf=*proc->tf`，但是子进程返回值为 0，于是 `np->tf->eax=0`。 还要拷贝已打开的文件 `np->ofile[]` 数组。拷贝当前工作路径 `np->cwd=idup(proc->cwd)`。拷贝进程名 `np->name`。设置进程状态 `np_state=RUNNABLE`。最后将 `pid` 通过函数返回值 `eax` 返回给父进程。 
+
+父进程返回值为子进程 `pid`，而子进程的返回值为 0，因为子进程被调度的时候从根据 `trapframe` 的内容返回到 `fork()` 函数的下一条指令处往下继续运行。又因为 `eax` 被设置为 0，造成好像是子进程也执行了 `fork()` 代码并返回 0 的假象，实际上子进程直接就是从 `fork()` 后的下一条指令开始运行的。
+
+从 `fork()` 拷贝的资源来看，`xv6` 的进程资源相对于 Linux 来说要少的多，主要就是内存空间和所打开的文件。
+
+### 2.4 forket()
+
+子进程的执行起点，将返回到用户态，发出 `fork()` 函数调用的的下一条语句。
+
+### 2.5 kill
+
+撤销指定 `pid` 的进程使用 `kill()` 函数，定义于 [proc.c#L476](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L476)。为了找到将要撤销的进程，需要扫描进程列表 `ptable.proc[]` 数组，逐个检查该进程号是否和传入的 `pid` 值相同。`kill()` 在撤销进程操作过程中主要是负责将 `p->killed` 标志置位，并不负责进程状态的修改。只有在被撤销进程处于睡眠 `SLEEPING` 状态时，将其状态修改为 `RUNNABLE`，只有经过 `RUNNALBE` 才能之进入 `RUNNING` 最后进入到 `ZOMBIE` 状态。 
+
+真正的撤销操作需要 `exit()` 函数完成，这只有在返回用户态之前才能执行。
+
+### 2.6 exit
+
+进程结束时完成 `exit()` 操作，请参见 [proc.c#L224](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L224)。首先，`init` 进程是不允许退出的，索引当系统发现执行 `exit()` 函数的是 `init` 进程则通过 `panic()` 打印警告信息 `init exiting`。 [proc.c#L237](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L237) 将关闭所有打开的文件，即遍历 `proc->ofile[]` 数组，对每一个文件执行 `fileclose()`，并通过 `iput()` 释放对当前工作目录的索引节点的占用（[proc.c#L246](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L246)）。
+
+由于自己要退出了，父进程通常在 `wait()`，所以需要用 `wakeup1()` 唤醒父进程。 
+
+接着将自己的子进程移交给 `init`。由于 PCB 中没有子进程的信息，因此只能遍历所有进程，看看它们谁的父进程指向自己（以此判定自己的子进程）。可以看出，Linux 中有完善的进程亲子关系组织，因此子进程的查找不需要这种低效的方法。如果子进程已经处于 `ZOMBIE` 状态则还需要唤醒 `init` 进程进行最后的清理工作。
+
+最后将自己的状态设置为 `ZOMBIE`（等待父进程做最后的检查和清理），并通过 `sched()` 切换到其他就绪进程。 
+
+### 2.7 增减用户内存空间（分配和释放）
+
+进程如果要分配内存而改变自己的内存影像，则需要用 `growproc()` 函数。[proc.c#L156](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L156) 的 `growproc()` 用于在用户空间分配 n 个字节。其中 n 为正数时时进行扩展（分配内存），而 n 为负数时进行收缩（释放内存）。分配操作是通过 `allocuvm()` 完成，而释放操作时通过 `deallocuvm()` 完成。`allocuvm()` 和 `deallocuvm()` 已经在内存管理的部分进行了分析。 
