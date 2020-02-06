@@ -87,7 +87,7 @@ date: 2019-06-01
 
 创建 `init` 进程的过程和 `fork()` 函数完成的操作有一些相似的地方，但是 `init` 进程由于是第 一个进程，无法通过拷贝的方法来创建进程的内存镜像。
 
- ### 2.3 fork 
+### 2.3 fork 
 
 除了第一个进程外，其他进程都需要通过 `fork` 系统调用来产生。[proc.c#L177](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L177) 的 fork() 实现了 Unix 概念中的子进程创建操作。类似创建 `init` 进程，首先需要 `allocproc()` 分配空闲的 PCB 记录在 `np` 变量中。 
 
