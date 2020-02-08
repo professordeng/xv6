@@ -164,3 +164,11 @@ Disassembly of section .text:
 
 使用 [copyout()](https://github.com/professordeng/xv6-expansion/blob/master/vm.c#L362) 拷贝数据到用户进程，`copyout()` 用 `ua2ka()` 将用户地址映射到内核地址。
 
+## 4. 系统调用接口 sysproc.c
+
+有关进程管理的系统调用，只是简单地用 `sys_XXX()` 形式的函数封装了一下各种具体系统服务函数，或者就直接实现简单功能的系统调用服务。 
+
+### 4.1 usys.S
+
+[usys.S](https://github.com/professordeng/xv6-expansion/blob/master/usys.S) 给出了用户态可以执行的、对应所有系统调用的函数，其作用相当于 C 语言库对系统调用的封装。例如 `SYSCALL(fork)` 则定义了可供用户调用的 `fork()` 函数，应用程序执行 `fork()` 将会引发 `sys_fork()` 系统调用。编写应用程序的时候，需要借助这些函数来进行系统调用。
+
