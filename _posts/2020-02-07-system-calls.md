@@ -124,3 +124,43 @@ Disassembly of section .text:
 
 ### 2.2 公共入口
 
+不同原因引起的中断经过 IDT 表跳转到 `vector0/1/2…255` 中某一个代码， 这些代码简单地压入中断号之后就跳转到 `alltraps` 公共处理代码处。
+
+[trapasm.S#L6](https://github.com/professordeng/xv6-expansion/blob/master/trapasm.S#L6) 将完成 Trap Frame 的构建。其 中 `pushal` 将压入 8 个寄存器的值到堆栈中。[trapasm.S#L13](https://github.com/professordeng/xv6-expansion/blob/master/trapasm.S#L13) 将段寄存器 `DS`、`ES` 设置为 `SEG_KDATA`， 而将每 CPU 数据的扩展段 `FS`、`GS` 设置为 `SEG_KCPU`。
+
+[trap()](https://github.com/professordeng/xv6-expansion/blob/master/trap.c#L35) 函数首先判断 `tf->trapno` 是否为系统调用 `T_SYSCALL`，如果是则转到 [syscall()](https://github.com/professordeng/xv6-expansion/blob/master/syscall.c#L131)。回顾前面 `trapframe` 生成过程中一个 `oesp`（`old esp`） 压入到堆栈中，因此相当于是 `trap()` 函数的参数（`x86` C 语言函数的参数传递规范）。这就是为什么可以用 `tf` 作为 `struct trapframe` 并访问到系统调用号的原因。 
+
+如果中断是硬件引起的，则调用相应的硬件中断处理函数。否则，`xv6` 认为是发生了错误的操作（例如除以 0 的操作），此时如果使用户态代码引起的则将当前进程 `cp->killed` 标志置位，否则是内核态代码只能 `panic()` 给出警告提示。 
+
+### 2.3 系统调用
+
+发生中断后如果确定是系统调用，则会执行 [syscall()](https://github.com/professordeng/xv6-expansion/blob/master/syscall.c#L131)。根据调用号（`proc->tf->eax`），从 `syscalls[]` 数组对应位置取出函数地址，并跳转执行。  
+
+编号为 n 的系统调用的处理函数 `syscalls[n]`， 还需要获得系统调用参数，这涉及到 `argint()`、`argptr()` 和 `argstr()` 等函数。这些函数也定义在 `syscall.c` 中，供具体的系统调用代码用以获取调用参数。`xv6` 资料使用 `trapframe` 里的 `esp` 来确定参数，`argint()` 进一步调用 `fetchint()` 从用户态堆栈读入参数并写入到 `*ip` 里。内核还需要确保指针在进程空间内部，虽然非法地址会引起进程的撤销，但是内核可以访问该进程以外的地址（进程传递了非法的地址指针）。
+
+`syscall()` 返回到 `trap()`，进而返回到 `alltraps` 代码段，最后通过 `iret` 完成系统调用的返回。
+
+### 2.4 trapasm.S
+
+中断的公共入口代码 `alltraps` 和公共返回代码 `trapret` 都在 `trapasm.S` 中以汇编形式实现。 需要注意返回代码 `trapret` 的最后一个操作时 `iret`，如果 `iret` 返回到另一个特权级别（将堆栈 中返回地址 `CS` 的 `RPL` 和当前的 `CPL` 比较而判定），则在恢复程序执行之前 `iret` 指令还从堆栈 弹出堆栈指针 `ESP` 与堆栈段寄存器 `SS`。
+
+### 2.5 trap.c
+
+`tvinit()` 该函数定义在 [trap.c#L17](https://github.com/professordeng/xv6-expansion/blob/master/trap.c#L17)。它用 `vectors[]` 中的中断服务程序入口地址加上访问权限形成 “门” 的结构，填写到 `IDT` 表（`idt[]`）里面。除了其中对应系统调用的 `idt[T_SYSCALL]` 项填写的访问权限是 `DPL_USER`，表明可以从用户态通过该门，其他的 IDT 表的门都不能在用户态调用。其中 `vectors[]` 数组定义在生成的 `vectors.S` 末尾，实际上是标号地址 `vector0~vector255`。而真正将 IDT 装入到 IDTR 要等待 `mpamin()->idtinit()` 的时候。
+
+对于每个外设的中断，在调用相应的处理函数（例如磁盘的 `ideintr()`）之后，还需要执行 `lapiceoi()` 向 `lapic` 芯片通知中断处理已经完成。
+
+### 2.6 syscall.h
+
+该文件定义了 `xv6` 系统调用的编号，一共有 21 个。
+
+## 3. 数据传递
+
+应用程序直接按照的 C 函数的形式进行系统调用，因此所有的参数都按照函数的参数传递方式，存放在函数的栈帧结构中。但是系统调用中，我们就需要从栈帧中定位参数的位置， 并设法读取相应的参数值。`argint()` 将系统调用的第 n 个参数作为整数指针返回，它从 `trapframe` 中定位第 n 个参数的位置，然后通过 `fetchint()` 检查地址范围并完成参数的值的读取。
+
+### 3.1 返回结果
+
+保存在 `eax` 中。
+
+使用 [copyout()](https://github.com/professordeng/xv6-expansion/blob/master/vm.c#L362) 拷贝数据到用户进程，`copyout()` 用 `ua2ka()` 将用户地址映射到内核地址。
+
