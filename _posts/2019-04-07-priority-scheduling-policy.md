@@ -1,5 +1,6 @@
 ---
-title: xv6 优先级调度思路
+title: 3. xv6 优先级调度思路
+date: 2019-08-05
 ---
 
 1. vim param.h
