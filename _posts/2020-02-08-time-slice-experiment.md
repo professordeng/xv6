@@ -19,4 +19,20 @@ date: 2019-08-01
 
 `xv6` 原来的是实现在每次时钟中断时就调用 `yield()` 让出 CPU 并引发一次调度。现在修改后的代码需要对时间片剩余量进行递减，以及判定当前进程时间片是否用完，决定是否需要进行调度。修改后的代码在 `trap.c` 的 `trap()` 函数中完成上述检查。
 
- 
+## 3. 查看时间片信息
+
+我们编写了 `loop.c` 程序，用于查看进程时间片信息。`loop.c` 有父子两个进程，分别进行长时间的循环计算。编译前，不要忘记在 `Makefile` 的 `UPROGS` 目标中增加一 项 `_loop\`。 
+
+最后在 `loop` 运行时，就可以用 `Ctrl + p` 检查当前进程剩余的时间片。可以看出各个进程时间片所剩的 `tick` 计数。 
+
+ ```bash
+slice left: 3 ticks, 1 sleep  init 80103e37 80103ed7 801048a9 80105865 8010567f
+slice left: 6 ticks, 2 sleep  sh 80103e37 80103ed7 801048a9 80105865 8010567f
+slice left: 8 ticks, 5 run    loop
+slice left: 1 ticks, 6 run    loop
+slice left: 3 ticks, 1 sleep  init 80103e37 80103ed7 801048a9 80105865 8010567f
+slice left: 6 ticks, 2 sleep  sh 80103e37 80103ed7 801048a9 80105865 8010567f
+slice left: 1 ticks, 5 run    loop
+slice left: 1 ticks, 6 run    loop
+ ```
+
