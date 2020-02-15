@@ -1,264 +1,67 @@
 ---
-title: 2. 给 PCB 添加优先级
+title: 2. 优先级调度
 date: 2019-08-03
 ---
 
-1. 给 PCB （进程控制块）添加优先级属性
+接下来在做一个简单的实验，为原来调度（Round Robin）增加优先级，只调度最高优先级进程，如果有多个最高优先级的进程，则这些进程间按照 RR 方式调度。为了实现优先级调度，首先需要在进程控制块中加入优先级成员，然后需要修改调度器的调度算法。当然还需要提供修改和设置优先级的系统调用，如果是动态优先级还需要优先级调整算法等。我们下面来实现 `xv6` 系统上的静态优先级调度。 
 
-   ```shell
-vim proc.h
-   ```
-   
-   在 `struct proc` 中添加一行
-   
-   ```c
-   int priority;      // Process priority (0-20); lower value, higher priority
-   ```
-   
-2. ps 实现
+本节做一个简单的实验，为原来的时间片轮转调度（Round Robin）增加优先级，只调度最高优先级进程，如果有多个相同最高优先级的进程，则这些进程间按照 RR 方式调度。为了实现优先级调度，我们需要完成
 
-   实现 ps 系统调用用来查看我们的进程信息
+1. 在进程控制块中加入优先级成员，并设置默认值。
+2. 提供修改优先级的系统调用。
+3. 需要修改调度器的调度算法，这里的优先级是静态的，所以是抢占式静态优先级调度算法。
+4. 提供测试样例
 
-   ```c
-   // cps designed by myself
-   int 
-   cps(){
-   	struct proc *p;
-   
-   	// Enable interrupts on this processor
-   	sti();
-   
-   	// loop over process table looking for process with pid
-   	acquire(&ptable.lock);
-   	cprintf("name \t pid \t state \t \t priority \n");
-   	for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-   		if( p->state == SLEEPING)
-   			cprintf("%s \t %d  \t SLEEPING \t %d\n ", p->name, p->pid, p->priority);
-   		else if( p->state == RUNNING )
-   			cprintf("%s \t %d  \t RUNNING \t %d\n ", p->name, p->pid, p->priority);
-   		else if( p->state == RUNNABLE )
-   			cprintf("%s \t %d  \t RUNNABLE \t %d\n ", p->name, p->pid, p->priority);
-   	}
-   
-   	release(&ptable.lock);
-   
-   	return 22;
-   }
-   
-   ```
+## 1. 添加优先级属性
 
-3. 修改 `allocproc` 给 `priority` 提供默认值
+在 `xv6` 的 `proc.h` 中修改 `proc` 结构体（进程控制块），增加成员 `priority`。
 
-   ```c
-   found:
-     p->state = EMBRYO;
-     p->pid = nextpid++;
-     p->priority = 10;           //default priority
-     release(&ptable.lock);
-   
-   ```
+既然有了优先级，那么在创建进程的时候就需要指定一个优先级或设置一个默认优先级。我们选择创建时使用默认优先级，后续需要的时候再调整优先级的方案。因此创建进程时分配 `proc` 结构体的 `allocproc()` 需要设置新进程的 `priority` 成员，并将 10 作为普通进程的默认优先级。
 
-4. 创建一个用户程序，该程序会创建一些子进程进行实验
+在 `exec.c` 切换 `curproc` 之前设置 `curproc->priority` 为 3，也就是说 `exec` 拷贝的进程优先级皆为 3。
 
-   ```c
-   #include "types.h"
-   #include "stat.h"
-   #include "user.h"
-   #include "fcntl.h"
-   
-   int 
-   main(int argc, char* argv[]){
-   	int k, n, id;
-   	double x = 0, z, d;
-   
-   	if( argc < 2 )
-   		n = 1;        //default value
-   	else 
-   		n = atoi ( argv[1] ); //from command line
-   	if ( n < 0 || n > 20 )
-   		n = 2;
-   
-   	if ( argc < 3)
-   		d = 1.0;
-   	else
-   		d = atoi ( argv[2] );
-   
-   	x = 0;
-   	id = 0;
-   	for ( k = 0; k < n; k++) {
-   		id = fork();
-   		if ( id < 0 ) {
-   			printf(1, "%d failed in fork!\n", getpid());
-   		} else if ( id > 0 ) { //parent
-   			printf(1,"Parent %d creating child %d\n", getpid(), id );
-   		} else { //child 
-   			printf(1, "Child %d created\n", getpid());
-   			for ( z = 0; z < 8000000.0; z += d ){
-   				x = x + 3.14 * 89.64;  // useless calculations to consume CPU time  
-   			}
-   			break;
-   		}
-   	}
-   	exit();
-   }
-   
-   ```
+为了能查看进程的优先级，我们需要修改 `proc.c` 中的 `procdump()` 函数，使之能打印优先级信息。除了打印进程优先级 `priority` 之外，在格式上也有一点小修改， 使得打印输出的效果更好一点。 
 
-   运行 `foo` 程序的时候你会看见僵尸进程，因为子进程没有运行完，占用着 PCB，而父母必须在进程表中等待，一旦检测到子进程结束，父进程将清除相应的 PCB。你可以在父进程结束前加 wait() 等待。
+## 2. 设置优先级
 
-5. 修改进程的优先级
+既然有基于优先级的调度，那么就需要提供设置优先级的系统调用。由于之前讨论过如何添加新的系统调用，这里只给出简要说明和核心代码。这个新的系统调用起名为 `chpr()`。简要步骤如下：
 
-   修改优先级的函数
+1. 在 `syscall.h` 中为新的系统调用定义其编号（必须和其他系统调用编号不同）。
+2. 在 `user.h` 中增加用户态函数原型 `int chpr(int pid, int priority)` 函数，第一个参数用于指出进程号，第二个参数指出新的优先级。 
+3. 在 `usys.S` 中添加 `chpr()` 函数的汇编实现代码（宏展开后对应于 `sys_chpr` 函数）。
+4. 修改系统调用的跳转表（`syscall.c` 中的 `syscalls[]` 数组）。
+5. 由于 `syscall.c` 中未定义 `sys_chpr` 函数，因此需要在上面这个 `syscalls[]` 数组前面增加一个外部函数声明。
+6. 在 `sysproc.c` 中实现 `sys_chpr()`。先获取 `pid` 和 `pr` 两个参数，然后调用 `chpr(pid, pr)` 将编号为 `pid` 的进程优先级设置为 `pr`。
+7. `chpr()` 的实现放在 `proc.c` 中。
+8. 最后在 `defs.h` 的 `proc.c` 部分添加函数原型 `int chpr(int, int);`，以便内核代码访问该函数。
 
-   vim proc.c
+顺便添加一个 `chpr` 命令来实现在 `shell` 下修改进程的优先级。
 
-   ```c
-   // change priority
-   int 
-   chpr( int pid, int priority ) {
-   	struct proc *p;
-   
-   	acquire(&ptable.lock);
-   	for ( p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-   		if ( p->pid == pid ) {
-   			p->priority = priority;
-   			break;
-   		}
-   	}
-   	release(&ptable.lock);
-   
-   	return pid;
-   }
-   ```
+## 3. 修改调度器
 
-6. 将前面两个函数添加到系统调用中。
+为进程添加优先级的信息后，还需要在调度器中修改调度行为。我们并没有对进程控制块数组进行改动，而是增加一个 `struct proc *highP` 变量来记录优先级最高的就绪进程。
 
-   vim sysproc.c
+若出现了多个最高优先级的进程，那么这些进程的调度是 RR 调度。
 
-   ```c
-   int
-   sys_cps ( void )
-   {
-   	return cps ();
-   }
-   
-   int
-   sys_chpr ( void )
-   {
-   	int pid, pr;
-   	if ( argint(0, &pid) < 0 )
-   		return -1;
-   	if ( argint(1, &pr) < 0 )
-   		return -1;
-   
-   	return chpr ( pid, pr );
-   }
-   
-   ```
+## 4. 验证优先级调度
 
-   
+首先在 `param.h` 中确认 `NCPU` 的数目为 2，也就是说系统最多可有两个进程同时运行，易于观察。
 
-7. 添加系统调用
+编写 `prio.c`，生成多个不同优先级的进程，并执行一些任务使其处于 `RUNNABLE` 或 `RUNNING` 状态，用于观察。
 
-   vim syscall.h
+`prio` 程序需要三个参数，第二个参数控制生成的子进程数目，第三个参数控制计算的任务量。例如：
 
-   ```c
-   #define SYS_cps    22
-   #define SYS_chpr   23
-   ```
-
-8. 添加头文件声明
-
-   vim defs.h
-
-   ```c
-   int             cps(void);
-   int             chpr( int pid, int priority );
-   ```
-
-   在 swtch.S 之前添加
-
-   vim user.h
-
-   ```c
-   int             cps(void);
-   int             chpr( int pid, int priority );
-   ```
-
-   在 ulib,c 之前添加
-
-   vim usys.S
-
-   ```
-   SYSCALL(cps)
-   SYSCALL(chpr)
-   ```
-
-   vim syscall.c
-
-   ```
-   extern int sys_cps(void);
-   extern int sys_chpr(void);
-   ```
-
-   在 *syscalls[] 数组前添加
-
-   ```
-   [SYS_cps]     sys_cps,
-   [SYS_chpr]    sys_chpr,
-   ```
-
-   在 *syscalls[] 数组内添加
-
-9. 调用 chpr 系统调用，利用下面的 nice 程序改变优先级。
-
-   vim nice.c
-
-   ```c
-   #include "types.h"
-   #include "stat.h"
-   #include "user.h"
-   #include "fcntl.h"
-   
-   int
-   main(int argc, char* argv[]){
-       int priority, pid;
-   
-       if (argc < 3) {
-           printf(2, "Usage: nice pid priority\n" );
-           exit();
-       }
-       pid = atoi ( argv[1] );
-       priority = atoi ( argv[2] );
-       if ( priority < 0 || priority > 20 ) {
-           printf(2, "Invaild priority (0-20)!\n" );
-           exit();
-       }
-       printf(1, " pid=%d, pr=%d\n", pid, priority );
-       chpr ( pid, priority );
-   
-       exit();
-   }
-   ```
-
-      
-
-## 总结
-
-为了实现优先级修改，修改和创建了如下文件
-
-```
-Makefile   添加应用
-defs.h     添加声明
-proc.c     实现函数
-proc.h     添加优先级属性
-syscall.c  添加系统调用到系统调用数组里
-syscall.h  添加系统调用
-sysproc.c  添加系统函数调用
-user.h     添加声明
-usys.S     添加声明
-foo.c      生成子进程进行实验
-nice.c     修改优先级
-ps.c       添加查看进程信息功能
+```bash
+piro 1 2&  # 生成一个子程序，并分配 2 倍的任务给子程序，时间也就延迟 2 倍
 ```
 
+执行下面指令，后台会有 3 个程序在执行任务。
+
+```bash
+make qemu-nox   # 启动系统
+prio 2 2&       # 创建进程并在后台执行 
+```
+
+然后修改将其中两个程序的优先级设置为 4，可以按 `Ctrl + p` 查看进程的执行状态。发现有三个程序处于 `sleep` 状态，是属于执行 `wait()` 后的父进程。还有两个优先级为 4 的进程处于 `run` 状态，一个优先级为 10 的处于 `runnable` 状态。这说明系统将 CPU 资源都分配给了高优先级的进程。
+
+可以尝试多创建几个进程，观察进程状态。
