@@ -284,7 +284,7 @@ close SIG;
   
   `ENTRY(_start)` 中 `_start` 表示入口地址，在 `entry.S` 中定义取值为 `0x0010000c` 记录在 ELF 文件的文件头结构体 `elfhdr` 的 `entry` 成员中（即 `elfhdr.entry`）。
   
-  用 `readelf -l kernel` 查看链接输出的 `kernel`，可以看到只有一个编号为 00 的段需要载入， `FielSiz` 刚好是 `0x0a516`（正好是 `entryother` 结束的地址）。
+  用 `readelf -l kernel` 查看链接输出的 `kernel`，可以看到只有一个编号为 00 的段需要载入， `FileSiz` 刚好是 `0x0a516`（正好是 `entryother` 结束的地址）。
   
   ```bash
   Elf file type is EXEC (Executable file)
@@ -491,6 +491,8 @@ fs.img: mkfs README.md $(UPROGS)
 ➜  xv6-expansion git:(dev) ll fs.img   
 -rw-rw-r-- 1 ubuntu ubuntu 500K Jan 23 13:14 fs.img
 ```
+
+用 `du -sh -b fs.img` 可以看到 `fs.img` 的大小为 512000 字节，相当于 1000 个 512 字节大小的盘块。
 
 由于我们还没有学习 `xv6` 的文件系统格式，因此现在也无法分析 `fs.img` 的内容。之后我们会专门讨论 `mkfs` 工具的实现。
 
