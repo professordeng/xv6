@@ -1,20 +1,17 @@
 ---
 title: 2. 实现简单的用户程序
-date: 2019-04-03
 ---
 
-上一节我们完成了 `xv6` 操作系统的安装，下面我们利用 `xv6` 操作系统提供的系统调用来实现一些简单的用户程序。
+完成了 XV6 操作系统的搭建后，我们可以利用 XV6 操作系统提供的系统调用来实现一个简单的用户程序。
 
-## 1. 磁盘映像文件的生成
+## 1. 磁盘影像文件的生成
 
-想要给 `xv6` 添加新的可执行文件，首先需要了解 `xv6` 磁盘文件系统是如何生成的，然后才能编写应用程序并出现在 `xv6` 的磁盘文件系统中。`xv6` 文件系统上的可执行文件的生成包括 2 个步骤：
+想要给 XV6 添加新的可执行文件，首先需要了解 XV6 磁盘文件系统是如何生成的，然后才能编写应用程序并出现在 XV6 的磁盘文件系统中。XV6 文件系统上的可执行文件的生成包括 2 个步骤：
 
 1. 生成各个应用程序。
-2. 将应用程序构成文件系统映像。
+2. 将应用程序构成文件系统影像。
 
-首先在 `Makefile` 中有一个默认规则，那就是所有的 `.c` 文件都需要通过默认的编译命令生成 `.o` 文件。另外在 `Makefile` 中有一个规则用于指出可执行文件的生成，如下
-
-##### 1-1
+首先在 `Makefile` 中有一个默认规则，那就是所有的 `.c` 文件都需要通过默认的编译命令生成 `.o` 文件。另外在 `Makefile` 中有一个规则用于指出可执行文件的生成，内容如下：
 
 ```makefile
 ULIB = ulib.o usys.o printf.o umalloc.o
@@ -59,6 +56,8 @@ fs.img: mkfs README.md $(UPROGS)
 
 下面我们实现一个简单的用户程序实现 `hello world!` 的输出。创建 `hello.c` 文件，此处的 `printf()` 的第一个参数是文件描述符，用于指出输出文件，例如 0 号是标准输入文件，1 号是标准输出文件，2 号是出错文件。
 
+#### code-2-1
+
 ```c
 #include "types.h"
 #include "stat.h"
@@ -80,11 +79,11 @@ objdump -t _hello | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > hello.sym
 ./mkfs fs.img README.md _cat _echo _forktest _grep _init _kill _ln _ls _mkdir _rm _sh _stressfs _usertests _wc _hello _zombie 
 ```
 
-第一行 `gcc` 编译命令是由默认规则触发的，生成 `hello.o`。第二、三、四行的命令是 [代码 1-1](#1-1) 的规则触发的，其中 `ld` 链接命令生成 `_hello` 可执行文件。由于可执行文件发生了更新，因此触发了磁盘文件系统 `fs.img` 目标的规则（第五行显示的命令使用 `mkfs` 程序生成 `fs.img` 磁盘映像文件），其中可执行文件列表的倒数第二个就是我们刚生成的 `_hello`。
+第一行 `gcc` 编译命令是由默认规则触发的，生成 `hello.o`。第二、三、四行的命令是 [code-2-1](#code-2-1) 的规则触发的，其中 `ld` 链接命令生成 `_hello` 可执行文件。由于可执行文件发生了更新，因此触发了磁盘文件系统 `fs.img` 目标的规则（第五行显示的命令使用 `mkfs` 程序生成 `fs.img` 磁盘影像文件），其中可执行文件列表的倒数第二个就是我们刚生成的 `_hello`。
 
-进入 `xv6` 后利用 `ls` 查看会多一个叫 hello 的应用程序，执行 `hello` 可输出我们期待的 `hello world!`。
+进入 XV6 后利用 `ls` 查看会多一个叫 `hello` 的应用程序，直接输入 `hello` 执行，可输出我们期待的 `hello world!`。
 
-退出 `xv6`，在终端执行 `ll _hello`，显示如下信息
+退出 XV6，在终端执行 `ll _hello`，显示 `_hello` 文件的相关信息如下：
 
 ```bash
 -rwxrwxr-x 1 ubuntu ubuntu 13K Jan 19 01:04 _hello
@@ -92,7 +91,7 @@ objdump -t _hello | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$/d' > hello.sym
 
 ## 3. 实现 copy 功能
 
-在 `xv6` 中可以调用系统函数实现大多 Linux 都自带的 `cp` 命令，因此 `cp` 命令属于用户程序。代码如下：
+在 XV6 中可以调用系统函数可实现 Linux 自带的 `cp` 命令（说明 `cp` 命令属于用户程序）。代码如下：
 
 ```c
 #include "types.h"
@@ -128,4 +127,4 @@ main(int argc, char *argv[])
 }
 ```
 
-修改 `Makefile` ，然后 `make qemu-nox`，执行 `cp README.md counterpart`，会发现一个名为 `counterpart` 的文件，其内容和 `README.md` 一模一样。
+修改 `Makefile` ，然后 `make qemu-nox`，执行 `cp README.md counterpart`，会发现一个名为 `counterpart` 的文件，利用 `cat` 读取其内容，发现和 `README.md` 的内容一模一样。
