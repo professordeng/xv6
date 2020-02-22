@@ -13,6 +13,8 @@ title: 2. 实现简单的用户程序
 
 首先在 `Makefile` 中有一个默认规则，那就是所有的 `.c` 文件都需要通过默认的编译命令生成 `.o` 文件。另外在 `Makefile` 中有一个规则用于指出可执行文件的生成，内容如下：
 
+#### code-2-1
+
 ```makefile
 ULIB = ulib.o usys.o printf.o umalloc.o
 
@@ -55,8 +57,6 @@ fs.img: mkfs README.md $(UPROGS)
 ## 2. 简单输出
 
 下面我们实现一个简单的用户程序实现 `hello world!` 的输出。创建 `hello.c` 文件，此处的 `printf()` 的第一个参数是文件描述符，用于指出输出文件，例如 0 号是标准输入文件，1 号是标准输出文件，2 号是出错文件。
-
-#### code-2-1
 
 ```c
 #include "types.h"
