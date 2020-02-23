@@ -1,11 +1,10 @@
 ---
-title: 13. 通用代码
-date: 2019-04-25
+title: 8. 通用代码
 ---
 
 ## 1. string.c
 
-由于系统比较简单，并没在系统中提供单独的 C 语言库，因此一些字符串处理功能需要 `xv6` 自己提供，实现细节在 [string.c](https://github.com/professordeng/xv6-expansion/blob/master/string.c)。
+由于系统比较简单，并没在系统中提供单独的 C 语言库，因此一些字符串处理功能需要 XV6 自己提供，实现细节在 [string.c](https://github.com/professordeng/xv6-expansion/blob/master/string.c)。
 
 1. `memset()` 用于将一段内存空间用指定的数值（8 bit）填充。
 2. `memcpy()` 将 n 个字节从一个内存地址 `v1` 拷贝到另一个内存地址 `v2` 处。
