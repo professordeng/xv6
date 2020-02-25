@@ -121,7 +121,7 @@ XV6 中使用 `ptable` 中的静态数组 `ptable.proc[]` 来记录和组织进�
 
 进程如果要分配内存而改变自己的内存影像，则需要用 [growproc()](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L156) 函数，`growproc()` 用于在用户空间分配 n 个字节。其中 n 为正数时时进行扩展（分配内存），而 n 为负数时进行收缩（释放内存）。分配操作是通过 [allocuvm()](https://github.com/professordeng/xv6-expansion/blob/master/vm.c#L219) 完成，而释放操作时通过 [deallocuvm()](https://github.com/professordeng/xv6-expansion/blob/master/vm.c#L251) 完成。 
 
-## 3. 进程切换
+## 3. 进程状态变化
 
 ### 3.1 sleep
 
