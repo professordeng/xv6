@@ -3,11 +3,11 @@ title: 2. 磁盘裸设备的读写
 date: 2019-11-03
 ---
 
-c本节学习如何给 `xv6` 添加一个额外的磁盘，在实验的过程中加深 `xv6` 文件系统的理解。
+XV6 的文件系统中对磁盘的划分类似 EXT2 底层划分，从底层到调用，XV6 的文件系统分 6 层实现。本文主要利用文件系统知识给 XV6 添加一个原生磁盘并实现简单的读写。
 
 ## 1. 生成裸磁盘
 
-首先我们查看 `xv6` 是如何添加磁盘的，先看看 `xv6.img` 的生成，打开 `Makefile`，相关语句如下：
+首先我们查看 XV6 是如何添加磁盘的，先看看 `xv6.img` 的生成，打开 `Makefile`，相关语句如下：
 
 ```makefile
 xv6.img: bootblock kernel
@@ -26,30 +26,39 @@ xv6.img: bootblock kernel
 
 **生成裸磁盘文件**
 
-我们模仿 `xv6.img` 的生成，手动生成一个 512 000 B 的空磁盘，每个盘块为 512 字节。
+我们模仿 `xv6.img` 的生成，手动生成一个 512000 B 的空磁盘，每个盘块为 512 字节。
 
 ```bash
 dd if=/dev/zero of=rawdisk.img bs=512 count=1000
-du -sh -b rawdisk.img
+du -sh -b rawdisk.img   # 查看磁盘大小
 ```
 
 此时目录下会多一个名为 `rawdisk.img` 的文件，这个文件将作为新的磁盘。我们可以搭建自己的文件系统。
 
 ## 2. 给操作系统添加新设备
 
-我们先看看 `xv6.img` 和 `fs.img` 这两个设备是如何添加进操作系统的，打开 `Makefile`，查找相关信息。
+我们先看看 `xv6.img` 和 `fs.img` 这两个设备是如何添加进操作系统的，打开 `Makefile`，查找相关信息。可用看到 `Makefile` 的 `qemu` 仿真命令选项 `QEMUOPTS` 将这两个文件添加了进入， 其中关于 `fs.img` 的命令如下
 
-2. 修改 `Makefile` 的 `qemu` 仿真命令选项 `QEMUOPTS`， 加入：
+```bash
+-drive file=fs.img,index=1,media=disk,format=raw
+```
 
-   ```bash
-   -driver file=rawdisk.img,index=2,media=disk,format=raw
-   ```
+`index` 是设备号，media 是媒介类型，format 是格式。我们依照此格式将 `rawdisk.img` 添加到 XV6，将下面语句添加到 `QEMUOPTS` 选项。 
 
-   `index` 是新增磁盘的设备号
+```bash
+-driver file=rawdisk.img,index=2,media=disk,format=raw
+```
 
-3. 系统启动时对 `rawdisk` 盘的初始化
+## 3. 操作系统对磁盘的初始化
 
-4. 提供系统调用对 `rawdisk` 的读写
+系统启动时需要对 `rawdisk` 盘做一定的初始化，然后才能调用相应的函数访问。这里可以自己初始化布局，也可以参照 XV6 的磁盘布局。
 
-5. 编写应用程序检验读写结果，检查 `rawdisk.img` 内容是否符合所写结果。
+## 4. 提供系统调用读写磁盘
 
+提供系统调用对 `rawdisk` 的读写
+
+## 5. 测试
+
+编写应用程序检验读写结果，检查 `rawdisk.img` 内容是否符合所写结果。
+
+可以利用 `dd` 指令直接读取。
