@@ -4,7 +4,7 @@ title: 7. 内存管理
 
 内存管理将分成三个方面来讨论：
 
-1. 启动时的内存管理
+1. 内存系统的初始化
 2. 空闲物理页帧管理
 3. 进程的虚存空间管理
 
@@ -18,7 +18,7 @@ X86 启动时处于 16 位状态并且没有分页机制，寻址空间为 `0~2^
 
 ## 2. 物理内存管理
 
-启动分页机制后，空闲的物理页帧是按照链表方式管理的。每个空闲物理页帧的头部几个字节用作链接指针，链表头由 [kmem.freelist](https://github.com/professordeng/xv6-expansion/blob/master/kalloc.c#L20) 所管理。当需要分配物理页帧时，通过 [kalloc()](https://github.com/professordeng/xv6-expansion/blob/master/kalloc.c#L79) 从链表头部取下一个页帧，反之释放一个页帧后通过 [kfree()](https://github.com/professordeng/xv6-expansion/blob/master/kalloc.c#L54) 加入到该空闲列表中。
+启动分页机制后，空闲的物理页帧是按照链表方式管理的。每个空闲物理页帧起始 4 个字节用作指针，链表头由 [kmem.freelist](https://github.com/professordeng/xv6-expansion/blob/master/kalloc.c#L20) 所管理。当需要分配物理页帧时，通过 [kalloc()](https://github.com/professordeng/xv6-expansion/blob/master/kalloc.c#L79) 从链表头部取下一个页帧，反之释放一个页帧后通过 [kfree()](https://github.com/professordeng/xv6-expansion/blob/master/kalloc.c#L54) 加入到该空闲列表中。
 
 ## 3. 进程空间管理
 

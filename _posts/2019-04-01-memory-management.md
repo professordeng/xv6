@@ -2,7 +2,19 @@
 title: 1. 内存管理
 ---
 
-XV6 通过页表机制实现了对内存空间的控制。页表使得 XV6 能够让不同进程各自的地址空间映射到相同的物理内存上，还能够为不同进程的内存提供保护。 除此之外，我们还能够通过使用页表来间接地实现一些特殊功能。XV6 主要利用页表来区分多个地址空间，保护内存。另外，它也使用了一些简单的技巧，即把不同地址空间的多段内存映射到同一段物理内存（内核部分），在同一地址空间中多次映射同一段物理内存（用户部分的每一页都会映射到内核部分），以及通过一个没有映射的页保护用户栈。
+XV6 通过页表机制实现了对物理内存的管理。进程使用的地址都是逻辑地址，32 位机器的逻辑地址范围在 `0~4GB`，XV6 内存管理的代码从功能上分两部分：
+
+1. 内存系统的初始化。
+2. XV6 操作系统正常运行时的内存管理代码。
+
+根据物理页帧和虚拟存储空间的不同，又分成：
+
+1. 物理页帧的分配、回收管理。
+2. 虚存空间分配、回收以及映射管理。
+
+其中虚存空间又根据保护级的不同，分成内核空间和用户空间两部分。
+
+下面将物理空间的页称为**页帧**，虚拟空间的页成为**虚页**。
 
 ## 1. 页表机制
 
@@ -26,13 +38,18 @@ X86 所有的虚拟地址都经过页表来完成地址转换，页表由 `CR3` 
 
 虚拟地址前十位作为页目录的偏移找到页目录项，找到页表基地址，接下来十位作为页表项的偏移找到页表项，最后将页表项的基址 + 最后 12 位偏移得到实际的物理地址。
 
-## 2. 内存初始化
+## 2. 页帧初始化
 
-在初始化 [main()](https://github.com/professordeng/xv6-expansion/blob/master/main.c#L14) 函数最开始处，内核代码存在于物理地址低地址的 `0x100000` 处，页表为 `main.c` 中的 [entrypgdir](https://github.com/professordeng/xv6-expansion/blob/master/main.c#L102) 数组，其中虚拟地址 `[0, 4MB)` 映射物理地址 `[0,4MB)`，虚拟地址 `[KERNBASE, KERNBASE+4MB)` 映射到物理地址 `[0, 4MB)`。可见现在内核实际能用的虚拟空间显然不足以完成正常工作的，所以初始化过程中需要重新设置页表。
+物理内存的初始化分两步：
+
+1. 早期布局，先分配 `[0, 4MB)` ，然后启动分页机制映射到整个物理空间。其中 `[0x100000, PHYSTOP]` 为可用物理内存。
+2. 启动分页后的空闲物理页帧初始化。也就是将可用物理内存中的空闲页帧串成一个链表，一开始 `[end, PHYSTOP)` 都是空闲页帧。
+
+在初始化 [main()](https://github.com/professordeng/xv6-expansion/blob/master/main.c#L14) 函数最开始处，内核代码存在于物理地址低地址的 `0x100000` 处，页表为 `main.c` 中的 [entrypgdir[]](https://github.com/professordeng/xv6-expansion/blob/master/main.c#L102) 数组，其中虚拟地址 `[0, 4MB)` 映射物理地址 `[0,4MB)`，虚拟地址 `[KERNBASE, KERNBASE+4MB)` 映射到物理地址 `[0, 4MB)`。可见现在内核实际能用的虚拟空间显然不足以完成正常工作的，所以初始化过程中需要重新设置页表。
 
  ### 2.1 物理内存初始化
 
-XV6 在 `main()` 函数中调用 `kinit1()` 和 `kinit2()` 来初始化物理内存，`kinit1()` 回收内核末尾到物理内存 4 M 的空闲物理内存，即 `[end, 4MB)`，记录在物理页帧空闲链表。
+XV6 在 `main()` 函数中调用 `kinit1()` 和 `kinit2()` 来初始化物理内存，`kinit1()` 回收 `[end, 4 M]` 的空闲物理内存（end 是内核结束的地方），记录在物理页帧空闲链表。
 
 ```c
 kinit1(end, P2V(4*1024*1024)); // phys page allocator
@@ -44,15 +61,28 @@ kinit1(end, P2V(4*1024*1024)); // phys page allocator
 kinit2(P2V(4*1024*1024), P2V(PHYSTOP)); // must come after startothers()
 ```
 
-两者的区别在于调用 `kinit1()` 时正使用最初的页表（也就是上面的内存布局），所以只能初始化 4 M，其实 `kinit1()` 收集的空闲物理内存正好可以分配给页表用。
+两者的区别在于：
 
-启动分页机制前需要分配页表，这就构成了自举问题，XV6 通过在 `main()` 函数最开始时 `kinit1()` 收集的空闲物理内存解决，由于在最开始时多核 CPU 还未启动，所以没有设置锁机制。
-
-`kinit2()` 在内核构建了新页表后，能够访问内核的整个虚拟地址空间，所以在这里初始化所有物理内存，并开始了锁机制保护空闲内存链表。
+1. 调用 `kinit1()` 时正使用最初的页表（也就是上面的内存布局），所以只能初始化 4 M，其实 `kinit1()` 收集的空闲物理内存正好可以分配给页表用。启动分页机制前需要分配页表，这就构成了自举问题，XV6 通过在 `main()` 函数最开始时 `kinit1()` 收集的空闲物理内存解决，由于在最开始时多核 CPU 还未启动，所以没有设置锁机制。
+2. `kinit2()` 在内核构建了新页表后，能够访问内核的整个虚拟地址空间，所以在这里初始化所有物理内存，并开始了锁机制保护空闲内存链表。
 
 ### 2.2 内核新页表初始化
 
-`main()` 函数通过调用 `kvmalloc()` 函数来实现内核新页表的初始化。通过初始化，内核 `[end, PHYSTOP)`  的内存空间均为空闲物理内存，虚拟地址空间 `KERNBASE` 以上的部分映射到物理内存低地址相应的位置。
+当使用 `entrypgdir` 作为页表建立起一些空闲内存的时候，主函数立即调用 [kvmalloc()](https://github.com/professordeng/xv6-expansion/blob/master/vm.c#L138) 函数来实现内核新页表 `kpgdir[]` 的初始化。大致有下面几个步骤
+
+1. 申请一个页帧存储页表目录，利用 [kalloc()](https://github.com/professordeng/xv6-expansion/blob/master/kalloc.c#L79) 函数。
+
+2. 利用 [kmap](https://github.com/professordeng/xv6-expansion/blob/master/vm.c#L103) 的布局构建页表目录布局。这里使用了 [mappages()](https://github.com/professordeng/xv6-expansion/blob/master/vm.c#L130) 函数。
+
+   我们查看 `kmap` 的第三项如下，` (void*)data` 就是空间的起始地址，`V2P(data)` 是物理空间的起始地址，`PHYSTOP` 是物理空间的结束地址，所以 `size` 为 `PHYSTOP-V2P(data)` ，最后一个是权限，`PTE_W` 表示可写。
+
+   ```c
+   { (void*)data,     V2P(data),     PHYSTOP,   PTE_W}, // kern data+memory
+   ```
+
+3. 为布局好的页表目录的每一项映射一个页表，这里调用了 [walkpgdir()](https://github.com/professordeng/xv6-expansion/blob/master/vm.c#L32) 函数。
+
+   给你一个逻辑地址（一般是页表下边界），然后查看 `pgdir[]` 是否有相关的页表，如果 `alloc` 为 1，那么就给页表目录项分配相应的页表。内核页表目录全部页表项都要分配相应的页表，因为内核要映射整个物理空间，这样才可以进行内存管理。
 
 ![virtual memory layout](/xv6-book/img/vm-layout.png)
 
