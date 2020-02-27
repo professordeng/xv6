@@ -1,6 +1,5 @@
 ---
-title: 2. 磁盘裸设备的读写
-date: 2019-11-03
+title: 1. 磁盘裸设备的读写
 ---
 
 XV6 的文件系统中对磁盘的划分类似 EXT2 底层划分，从底层到调用，XV6 的文件系统分 6 层实现。本文主要利用文件系统知识给 XV6 添加一个原生磁盘并实现简单的读写。
@@ -18,7 +17,7 @@ xv6.img: bootblock kernel
   dd if=kernel of=xv6.img seek=1 conv=notrunc
 ```
 
-`xv6.img` 生成需要两个文件：`bootblock` 和 `kernel`。
+可知 `xv6.img` 生成需要两个文件：`bootblock` 和 `kernel`。
 
 第二行的 `dd` 指令中以 `/dev/zero` 为输入文件（input file），`xv6.img` 为输出文件（output file），拷贝 10000 块，一块默认为 512 字节，故生成的 `xv6.img` 总大小为 5120000 B，也就是 5000 KB。
 
@@ -37,15 +36,15 @@ rawdisk.img:
 
 ### 1.2 挂载磁盘
 
-我们先看看 `xv6.img` 和 `fs.img` 这两个设备是如何挂载到操作系统上的，打开 `Makefile`，查找相关信息。可用看到 `Makefile` 的 `qemu` 仿真命令选项 `QEMUOPTS` 将这两个文件挂载， 其中关于 `fs.img` 的命令如下
+我们先看看 `xv6.img` 和 `fs.img` 这两个设备是如何挂载到操作系统上的，打开 `Makefile`，查找相关信息。可用看到 `Makefile` 的 QEMU 仿真命令选项 QEMUOPTS 将这两个文件挂载， 其中关于 `fs.img` 的命令如下
 
 ```bash
 -drive file=fs.img,index=1,media=disk,format=raw
 ```
 
-`index` 是设备号，media 是媒介类型，format 是格式。
+index 是设备号，media 是媒介类型，format 是格式。
 
-`QEMUOPTS` 中有一个变量是 `QEMUEXTRA`，应该是用来扩展功能的，我们在 `QEMUOPTS` 的上面添加如下一行：
+QEMUOPTS 中有一个变量是 QEMUEXTRA，应该是用来扩展功能的，我们在 QEMUOPTS 的上面添加如下一行：
 
 ```makefile
 QEMUEXTRA = -drive file=rawdisk.img,index=2,media=disk,format=raw
