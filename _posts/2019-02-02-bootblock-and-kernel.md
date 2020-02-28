@@ -11,13 +11,15 @@ XV6 二进制代码分为两部分：
 
 ## 1. 启动扇区
 
-在 X86 PC 启动的时候，首先执行的代码是主板上的 BIOS （Basic Input Output System），主要完成一些硬件自检的工作。在这些工作做完之后，BIOS 会从启动盘里读取第一个扇区（启动扇区 boot sector）的 512 字节数据到内存中，这 512 字节的代码就是我们熟知的 `bootloader` 。在导入完成后 CPU 控制权由 BIOS 转交给 `bootloader` 。BIOS 会把 `bootloader` 导入到 `0x7c00` 开始的地方，然后把 PC 指针设成此地址，将控制权交给 `bootloader` 。
+在 X86 PC 启动的时候，首先执行的代码是主板上的 BIOS （Basic Input Output System）。BIOS 存放在非易失存储器中，主要完成一些硬件自检的工作。在这些工作做完之后，BIOS 会从启动盘里读取第一个扇区（启动扇区 boot sector）的 512 字节数据到内存中，这 512 字节的代码就是我们熟知的 `bootloader` 。在导入完成后 CPU 控制权由 BIOS 转交给 `bootloader` 。BIOS 会把 `bootloader` 导入到 `0x7c00` 开始的地方，然后把 PC 指针设成此地址（通过设置寄存器 `%ip`），将控制权交给 `bootloader` 。
 
 XV6 启动扇区的代码 `bootblock`  就是扮演上述 `bootloader` 的角色，它将继续负责将 XV6 的内核代码 `kernel` 装载到内存，并将控制权交给 `kernel` ，从而完成启动过程。
 
 ### 1.1 启动扇区的生成
 
-XV6 系统通过 [bootasm.S](https://github.com/professordeng/xv6-expansion/blob/master/bootasm.S) 和 [bootmain.c](https://github.com/professordeng/xv6-expansion/blob/master/bootmain.c) 生成 `bootblock.o` 目标文件后，再通过 `objcopy` 工具将其中的代码节 `.text` 抽取出来写到 `bootblock` 文件中产生启动扇区。
+XV6 引导加载器 `bootblock` 包括两个源文件，一个由 16 位和 32 位汇编混合编写而成的  [bootasm.S](https://github.com/professordeng/xv6-expansion/blob/master/bootasm.S)，另一个由 C 写成 [bootmain.c](https://github.com/professordeng/xv6-expansion/blob/master/bootmain.c) 。
+
+XV6 系统通过 `bootasm.S`和 `bootmain.c` 生成 `bootblock.o` 目标文件后，再通过 `objcopy` 工具将其中的代码节 `.text` 抽取出来写到 `bootblock` 文件中产生启动扇区。
 
 启动扇区 `bootblock` 的生成步骤包括编译、链接与定制。如下代码是 `Makefile` 中生成 `bootblock` 的部分：
 
