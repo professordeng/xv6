@@ -142,7 +142,7 @@ main(int argc, char *argv[])
 
 在本章结束之前，我们再编写一个程序，使得它可以创建多个进程并发运行，用于观察多进程分时运行的现象。创建 `fork.c` 文件，内容如下：
 
-```CQL
+```c
 #include "types.h"
 #include "stat.h"
 #include "user.h"
