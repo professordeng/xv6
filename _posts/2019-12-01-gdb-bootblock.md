@@ -1,5 +1,5 @@
 ---
-title: 5. 调试 bootblock
+title: 1. 调试 bootblock
 ---
 
 XV6 运行在 `i386` 处理器上（32 位 X86 处理器），在电脑刚启动的时候，首先执行的代码是主板上的 BIOS （Basic Input Output System）。BIOS 存放在非易失存储器中，主要完成一些硬件自检的工作。在这些工作做完之后，BIOS 会从启动盘里读取第一个扇区（启动扇区 boot sector）的 512 字节数据到内存中，这 512 字节的代码就是我们熟知的 `bootloader` 。在导入完成后 CPU 控制权由 BIOS 转交给 `bootloader` 。BIOS 会把 `bootloader` 导入到 `0x7c00` 开始的地方，然后把 PC 指针设成此地址（通过设置寄存器 `%ip`），将控制权交给 `bootloader` 。

@@ -1,5 +1,5 @@
 ---
-title: 6. 调试 bootblock（二）
+title: 2. 调试 bootblock（二）
 ---
 
 上节我们讲完 `bootasm.S` 的运行过程，无非就是两个功能

@@ -1,5 +1,5 @@
 ---
-title: 9. 调试 kernel
+title: 3. 调试 kernel
 ---
 
 之前学习完调试 `bootmain` 后，我们知道了 `bootmain` 为 kernel 做了以下准备工作：
