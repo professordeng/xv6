@@ -25,11 +25,11 @@ xv6.img: bootblock kernel
 
 第四行将 `kernel` 文件复制到 `xv6.img` 中，`seek` 为偏移位，即从输出文件开头跳过 1 个块（512 字节）后再开始复制（第一个 512 字节给了 `bootblock`），同样是不截短文件的形式写入。
 
-我们模仿 `xv6.img` 的生成，在 `Makefile` 中添加如下指令，手动生成一个 4096000 B 的空磁盘，每个盘块为 4096 字节。
+我们模仿 `xv6.img` 的生成，在 `Makefile` 中添加如下指令，手动生成一个 4096000 B 的空磁盘，每个盘块为 512 字节（8 个盘块等于 1 块物理页帧）。
 
 ```makefile
 rawdisk.img:
-  dd if=/dev/zero of=rawdisk.img bs=4096 count=1000
+  dd if=/dev/zero of=rawdisk.img bs=512 count=8000
 ```
 
 此时目录下会多一个名为 `rawdisk.img` 的文件，`du -sh -b rawdisk.img` 可查看磁盘大小，这个文件将作为新的磁盘。
@@ -57,6 +57,8 @@ QEMUEXTRA = -drive file=rawdisk.img,index=2,media=disk,format=raw
 系统启动时需要对 `rawdisk` 盘做一定的初始化，然后才能调用相应的函数访问。这里可以自己初始化布局，也可以参照 XV6 的磁盘布局。
 
 为了以后给虚存实验做准备，我们需要一个结构体来记录磁盘使用信息。
+
+
 
 ## 3. 提供系统调用读写磁盘
 
