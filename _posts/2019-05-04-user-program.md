@@ -49,7 +49,7 @@ XV6 的第一个应用程序是 `init` 进程，其前身是 [initcode.S](https:
 
 这是 XV6 的 shell 程序，它的主函数在 [sh.c#L144](https://github.com/professordeng/xv6-expansion/blob/master/sh.c#L144)。
 
-首先打开三个标准文件：标准输入、标准输出和标准出错文件，其文件描述符分别为 0、 1、2。但是其代码是打开文件 0/1/2/3 然后再关闭文件 3，读者可以尝试修改一下避免打开再关闭文件造成的时间浪费。 
+首先打开三个标准文件：标准输入、标准输出和标准出错文件，其文件描述符分别为 0、 1、2。但是其代码是打开文件 0 / 1 / 2 / 3 然后再关闭文件 3，读者可以尝试修改一下避免打开再关闭文件造成的时间浪费。 
 
 然后是一个循环，不断读入命令行的命令并执行，除了 `cd` 命令单独处理外，其他的命令（含内部命令）由 [runcmd()](https://github.com/professordeng/xv6-expansion/blob/master/sh.c#L56) 完成。其中 [parsecmd()](https://github.com/professordeng/xv6-expansion/blob/master/sh.c#L327) 将会把用户输入的命令字符串解析，并填写通用命令数据对象 [cmd](https://github.com/professordeng/xv6-expansion/blob/master/sh.c#L16) 结构体中的命令类型。
 
@@ -66,7 +66,7 @@ XV6 中的其他命令数据对象结构体 （`execmd`、`redircmd`、`pipecmd`
 从 ELF 文件可以看出 `ls` 程序是从 0 地址（Entry point address）开始运行代码的，这个与 Linux 上的可执行文件并不相同。 
 
 ```bash
-➜  xv6-expansion git:(dev) readelf -h _ls                
+# readelf -h _ls                
 ELF Header:
   Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00 
   Class:                             ELF32

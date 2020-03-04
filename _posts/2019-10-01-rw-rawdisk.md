@@ -25,11 +25,11 @@ xv6.img: bootblock kernel
 
 第四行将 `kernel` 文件复制到 `xv6.img` 中，`seek` 为偏移位，即从输出文件开头跳过 1 个块（512 字节）后再开始复制（第一个 512 字节给了 `bootblock`），同样是不截短文件的形式写入。
 
-我们模仿 `xv6.img` 的生成，在 `Makefile` 中添加如下指令，手动生成一个 512000 B 的空磁盘，每个盘块为 512 字节。
+我们模仿 `xv6.img` 的生成，在 `Makefile` 中添加如下指令，手动生成一个 4096000 B 的空磁盘，每个盘块为 4096 字节。
 
 ```makefile
 rawdisk.img:
-  dd if=/dev/zero of=rawdisk.img bs=512 count=1000
+  dd if=/dev/zero of=rawdisk.img bs=4096 count=1000
 ```
 
 此时目录下会多一个名为 `rawdisk.img` 的文件，`du -sh -b rawdisk.img` 可查看磁盘大小，这个文件将作为新的磁盘。
@@ -56,11 +56,30 @@ QEMUEXTRA = -drive file=rawdisk.img,index=2,media=disk,format=raw
 
 系统启动时需要对 `rawdisk` 盘做一定的初始化，然后才能调用相应的函数访问。这里可以自己初始化布局，也可以参照 XV6 的磁盘布局。
 
+为了以后给虚存实验做准备，我们需要一个结构体来记录磁盘使用信息。
+
 ## 3. 提供系统调用读写磁盘
 
-提供系统调用对 `rawdisk` 的读写
+提供系统调用对 `rawdisk` 的读写，首先我们把第一个盘块作为超级块，超级块很简单，主要负责初始化，
 
 ## 4. 测试
+
+### 4.1 原生系统功能
+
+首先我们得学习一下 XV6 读文件的过程，然后再来进行模仿和创新。其中关于文件的函数有：
+
+```c
+open(name, perm);      // 打开或创建文件
+write(fd, buf, len);   // 将 buf 中 len 个字节写入文件
+close(fd)              // 关闭文件符，相当于进程不使用该文件
+read(fd, buf, len);    // 将文件中的 len 字节读到 buf 中
+unlink(name);          // 若硬链接为 1，unlink 操作表示删除文件
+fstat(fd, stat);       // 将文件 fd 的状态信息读取到 stat 中
+```
+
+因此我们可用编写一个程序来读取 `README.md` 的数据以及文件信息，并显示出来。
+
+
 
 编写应用程序检验读写结果，检查 `rawdisk.img` 内容是否符合所写结果。
 
