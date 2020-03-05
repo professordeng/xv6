@@ -7,7 +7,7 @@
 
 <h3>{{ group.name }}</h3>
 <ul>
-    {% for post in group.items %}
+    {% for post in group.items reversed %}
     <li><div style="width:60px;float:left;">{{ post.date | date: "%b %-d" }}</div> <a href="{{ site.baseurl }}{{ post.url }}">{{ post.title }}</a></li>
     {% endfor %}
 </ul>

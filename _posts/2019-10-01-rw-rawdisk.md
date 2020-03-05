@@ -60,13 +60,33 @@ QEMUEXTRA = -drive file=rawdisk.img,index=2,media=disk,format=raw
 
 ## 3. 提供相应函数支持
 
-我们先看看 XV6 文件系统是如何写盘块的。由于我们不需要 `inode` 支持，因此我们只要实现低下三层的接口就能实现裸磁盘的读写。地下三层分别是
+我们先看看 XV6 文件系统是如何写盘块的。由于我们不需要 `inode` 支持，因此我们只需要实现三层功能。
 
 | 层   | 抽象接口 |
 | ---- | -------- |
-| 2    | 日志     |
+| 2    | 日志层   |
 | 1    | 缓存块   |
 | 0    | 磁盘     |
+
+缓存块的信息在 `buf.h`，具体如下：
+
+```c
+struct buf {
+  int flags;
+  uint dev;
+  uint blockno;
+  struct sleeplock lock;
+  uint refcnt;
+  struct buf *prev; // LRU cache list
+  struct buf *next;
+  struct buf *qnext; // disk queue
+  uchar data[BSIZE];
+};
+#define B_VALID 0x2  // buffer has been read from disk
+#define B_DIRTY 0x4  // buffer needs to be written to disk
+```
+
+由于 XV6 的读写一定要经过块缓存，为了尽量少地改动代码，所以我们复用其缓存层的代码
 
 ## 4. 提供系统调用读写磁盘
 
