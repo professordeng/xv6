@@ -1,5 +1,5 @@
 ---
-title: 2. bootblock
+title: 2. bootblock（调试）
 ---
 
 从这里开始分析 XV6 的启动过程。启动的整个流程包括 `BIOS` → `bootloader` → `kernel`，XV6 的 `bootloader` 是启动扇区 `bootblock` 文件，`kernel` 是内核文件 `kernel`。XV6 的启动包括主 CPU 启动和其他 CPU 启动两个分支，其中主 CPU 的启动过程才是重点。 

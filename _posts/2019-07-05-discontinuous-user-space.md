@@ -1,5 +1,5 @@
 ---
-title: 5. 实现不连续的虚拟空间
+title: 5. 实现不连续的虚拟空间（实验）
 ---
 
 实际上 XV6 只允许扩展和收缩进程空间（虚拟空间），其进程空间是连续的。学习 XV6 进程空间的内存管理方法：
@@ -13,7 +13,7 @@ title: 5. 实现不连续的虚拟空间
 
 XV6 的进程空间只有一个连续区间，只允许扩展和收缩两个操作，因此只需要一个 [sz](https://github.com/professordeng/xv6-expansion/blob/vma/proc.h#L45) 成员就可以记录。如果要实现类似 Linux 操作系统的内存分配 `alloc()` 和释放 `free()` 操作，那么就可能在进程空间上造成空洞，这种不连续的空间需要其他额外信息来描述。
 
-我们定义一个连续内存空间的描述符 [vma](https://github.com/professordeng/xv6-expansion/blob/vma/proc.h#L37) 结构体，进程控制块添加 [vm[10]](https://github.com/professordeng/xv6-expansion/blob/vma/proc.h#L58)，可以记录 9 个连续内存。
+我们定义一个连续内存空间的描述符 [vma](https://github.com/professordeng/xv6-expansion/blob/vma/proc.h#L37) 结构体，进程控制块添加 [vm[10]](https://github.com/professordeng/xv6-expansion/blob/vma/proc.h#L58)，可以记录 9 个连续内存，在生成进程的函数 [allocproc](https://github.com/professordeng/xv6-expansion/blob/vma/proc.c#L92()) 中初始化。
 
 修改 `proc.c` 中的 [procdump()](https://github.com/professordeng/xv6-expansion/blob/vma/proc.c#L571)，增加内存影像的输出，因此只需要按 `Ctrl + p` 就可以将每个进程的各 `vma` 起始地址和长度显示出来。
 
