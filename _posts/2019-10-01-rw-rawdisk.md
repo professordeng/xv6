@@ -30,9 +30,10 @@ xv6.img: bootblock kernel
 ```makefile
 rawdisk.img:
   dd if=/dev/zero of=rawdisk.img bs=512 count=8000
+  dd if=README.md of=rawdisk.img conv=notrunc
 ```
 
-此时目录下会多一个名为 `rawdisk.img` 的文件，`du -sh -b rawdisk.img` 可查看磁盘大小，这个文件将作为新的磁盘。
+此时目录下会多一个名为 `rawdisk.img` 的文件，`du -sh -b rawdisk.img` 可查看磁盘大小，这个文件将作为新的磁盘。用 `more` 指令查看，发现 `README.md` 的内容已经被拷贝到 `rawdisk.img`。
 
 ### 1.2 挂载磁盘
 
@@ -54,9 +55,40 @@ QEMUEXTRA = -drive file=rawdisk.img,index=2,media=disk,format=raw
 
 ## 2. 操作系统对磁盘的初始化
 
-系统启动时需要对 `rawdisk` 盘做一定的初始化，然后才能调用相应的函数访问。这里可以自己初始化布局，也可以参照 XV6 的磁盘布局。
+xv6 的磁盘初始化函数是 `ideinit()`，内容如下：
 
-为了以后给虚存实验做准备，我们需要一个结构体来记录磁盘使用信息。
+```c
+void
+ideinit(void)
+{
+  int i;
+
+  initlock(&idelock, "ide");   
+  ioapicenable(IRQ_IDE, ncpu - 1);    // 最后一个 CPU 的 IDE_IRQ 中断
+  idewait(0);                         // 等待磁盘接受命令
+
+  // Check if disk 1 is present
+  outb(0x1f6, 0xe0 | (1<<4));
+  for(i=0; i<1000; i++){
+    if(inb(0x1f7) != 0){
+      havedisk1 = 1;
+      break;
+    }
+  }
+
+  // Check if disk 2 is present
+  outb(0x1f6, 0xe0 | 2<<4);
+  for(i=0; i<1000; i++){
+    if(inb(0x1f7) != 0){
+      cprintf("检测到 rawdisk\n");
+      break;
+    }
+  }
+
+  // Switch back to disk 0.
+  outb(0x1f6, 0xe0 | (0<<4));
+}
+```
 
 ## 3. 提供相应函数支持
 
@@ -86,11 +118,11 @@ struct buf {
 #define B_DIRTY 0x4  // buffer needs to be written to disk
 ```
 
-由于 XV6 的读写一定要经过块缓存，为了尽量少地改动代码，所以我们复用其缓存层的代码
+由于 XV6 的读写一定要经过块缓存，为了尽量少地改动代码，所以我们复用其缓存层的代码。
 
 ## 4. 提供系统调用读写磁盘
 
-提供系统调用对 `rawdisk` 的读写，首先我们把第一个盘块作为超级块，超级块很简单，主要负责初始化，
+提供系统调用对 `rawdisk` 的读写，我们查看文件系统是如何读取超级块的，然后复用其中的代码读取盘块信息。
 
 ## 5. 读写测试
 
@@ -107,8 +139,32 @@ unlink(name);          // 若硬链接为 1，unlink 操作表示删除文件
 fstat(fd, stat);       // 将文件 fd 的状态信息读取到 stat 中
 ```
 
-因此我们可用编写一个程序来读取 `README.md` 的数据以及文件信息，并显示出来。
+因此我们可用编写一个程序来读取 `README.md` 的数据以及文件信息，并显示出来。函数如下：
 
-编写应用程序检验读写结果，检查 `rawdisk.img` 内容是否符合所写结果。
+```c
+char buf[512] = "hello world!";  // 全局变量
 
-可以利用 `dd` 指令直接读取。
+void readme() {
+  int fd = open("README.md", O_RDONLY);   // fd >= 0 表示创建成功
+
+  struct stat st;
+  fstat(fd, &st);       // 读取文件信息 
+  printf(1, "dev: %d\n", st.dev);
+  printf(1, "ino: %d\n", st.ino);
+  printf(1, "nlink: %d\n", st.nlink);
+  printf(1, "type: %d\n", st.type);
+  printf(1, "size: %d\n", st.size);
+
+  read(fd, buf, 512);
+  printf(1, "content is below:\n%s", buf);
+  close(fd);
+}
+```
+
+编写应用程序检验读写结果，检查 `rawdisk.img` 内容是否符合所写结果。为了忽略同步等繁琐的问题，我们在内核区定义一个全局变量，在 `main` 函数初始化时将磁盘的数据读到全局变量中，之后就可以用系统调用将数据读取出来。首先用 more 命令查看 `rawdisk.img` 的数据如下：
+
+```bash
+# more rawdisk.img
+read rawdisk succeed!
+```
+
