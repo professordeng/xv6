@@ -2,7 +2,26 @@
 title: 1. 磁盘裸设备的读写（实验）
 ---
 
-XV6 的文件系统中对磁盘的划分类似 EXT2 底层划分，从底层到调用，XV6 的文件系统分 6 层实现。本文主要利用文件系统知识给 XV6 添加一个原生磁盘并实现简单的读写。
+该实验可以分为下面几个步骤：
+
+1. 生成一个大小合适的文件，并写一些数据到文件中。
+2. 将文件作为新的 IDE 磁盘添加到 xv6 中，设备号为 2。
+3. 改造对应的 xv6 代码，尝试读取新磁盘中的数据，若读取成功则实验完成。
+
+---
+
+XV6 的文件系统中对磁盘的划分类似 EXT2 底层划分，从底层到调用，XV6 的文件系统分 6 层实现。
+
+| 层   | 抽象接口 |
+| ---- | -------- |
+| 5    | 路径名   |
+| 4    | 目录     |
+| 3    | 索引节点 |
+| 2    | 日志层   |
+| 1    | 缓存层   |
+| 0    | 磁盘     |
+
+本节主要利用文件系统知识给 XV6 添加一个原生磁盘并实现简单的读写。
 
 ## 1. 生成裸磁盘
 
@@ -33,7 +52,13 @@ rawdisk.img:
   dd if=README.md of=rawdisk.img conv=notrunc
 ```
 
-此时目录下会多一个名为 `rawdisk.img` 的文件，`du -sh -b rawdisk.img` 可查看磁盘大小，这个文件将作为新的磁盘。用 `more` 指令查看，发现 `README.md` 的内容已经被拷贝到 `rawdisk.img`。
+如果这里没有加参数 `notrunc`，那么读入 `README.md` 后，`rawdisk.img` 的大小将变为 `README.md` 的大小。添加后，命令行下执行如下命令，即可得到新磁盘信息，大小为。
+
+```bash
+# make     
+# du -sh -b rawdisk.img
+4096000	rawdisk.img
+```
 
 ### 1.2 挂载磁盘
 
@@ -45,84 +70,27 @@ rawdisk.img:
 
 index 是设备号，media 是媒介类型，format 是格式。
 
-QEMUOPTS 中有一个变量是 QEMUEXTRA，应该是用来扩展功能的，我们在 QEMUOPTS 的上面添加如下一行：
+QEMUOPTS 中有一个变量是 QEMUEXTRA，应该是用来扩展功能的，我们在 QEMUOPTS 的上面添加如下一行完成挂载。
 
 ```makefile
 QEMUEXTRA = -drive file=rawdisk.img,index=2,media=disk,format=raw
 ```
 
-并在 `clean` 命令下添加 `rawdisk.img`，完成挂载。
+在 `clean` 命令下添加 `rawdisk.img`，可以使用 `make clean` 清理生成的 `rawdisk.img` 文件。
 
 ## 2. 操作系统对磁盘的初始化
 
-xv6 的磁盘初始化函数是 `ideinit()`，内容如下：
+xv6 的 `main` 会调用 [ideinit()](https://github.com/professordeng/xv6-expansion/blob/dev/ide.c#L50) 对磁盘进行初始化。只有最后一个 CPU 打开了磁盘设备中断 `IRQ_IDE`。
 
-```c
-void
-ideinit(void)
-{
-  int i;
+## 3. 磁盘读写
 
-  initlock(&idelock, "ide");   
-  ioapicenable(IRQ_IDE, ncpu - 1);    // 最后一个 CPU 的 IDE_IRQ 中断
-  idewait(0);                         // 等待磁盘接受命令
+缓存块 [buf](https://github.com/professordeng/xv6-expansion/blob/dev/buf.h) 的信息在 `buf.h`，磁盘的读写都依赖于缓存块。
 
-  // Check if disk 1 is present
-  outb(0x1f6, 0xe0 | (1<<4));
-  for(i=0; i<1000; i++){
-    if(inb(0x1f7) != 0){
-      havedisk1 = 1;
-      break;
-    }
-  }
-
-  // Check if disk 2 is present
-  outb(0x1f6, 0xe0 | 2<<4);
-  for(i=0; i<1000; i++){
-    if(inb(0x1f7) != 0){
-      cprintf("检测到 rawdisk\n");
-      break;
-    }
-  }
-
-  // Switch back to disk 0.
-  outb(0x1f6, 0xe0 | (0<<4));
-}
-```
-
-## 3. 提供相应函数支持
-
-我们先看看 XV6 文件系统是如何写盘块的。由于我们不需要 `inode` 支持，因此我们只需要实现三层功能。
-
-| 层   | 抽象接口 |
-| ---- | -------- |
-| 2    | 日志层   |
-| 1    | 缓存块   |
-| 0    | 磁盘     |
-
-缓存块的信息在 `buf.h`，具体如下：
-
-```c
-struct buf {
-  int flags;
-  uint dev;
-  uint blockno;
-  struct sleeplock lock;
-  uint refcnt;
-  struct buf *prev; // LRU cache list
-  struct buf *next;
-  struct buf *qnext; // disk queue
-  uchar data[BSIZE];
-};
-#define B_VALID 0x2  // buffer has been read from disk
-#define B_DIRTY 0x4  // buffer needs to be written to disk
-```
-
-由于 XV6 的读写一定要经过块缓存，为了尽量少地改动代码，所以我们复用其缓存层的代码。
+磁盘读写函数是 [iderw()](https://github.com/professordeng/xv6-expansion/blob/dev/ide.c#L133)。
 
 ## 4. 提供系统调用读写磁盘
 
-提供系统调用对 `rawdisk` 的读写，我们查看文件系统是如何读取超级块的，然后复用其中的代码读取盘块信息。
+提供系统调用对 `rawdisk` 的读写，通过复用系统读超级块的代码，完成裸磁盘的读写。
 
 ## 5. 读写测试
 
