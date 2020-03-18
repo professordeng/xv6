@@ -43,7 +43,7 @@ xv6 创建文件时，有 4 种模式：
 创建或使用文件的第一步是用 [open()](https://github.com/professordeng/xv6-expansion/blob/dev/sysfile.c#L286) 函数打开对应的文件，`open(pathname, omode)` 实现逻辑如下：
 
 1. 如果 `omode` 包含了 `O_CREATE`，则 `open` 函数会先调用 `create()` 函数创建一个文件。如果不包含 `O_CREATE` 参数，则根据路径名找文件。
-2. 如果 1 成功了，那么接下来就分配文件结构体 `f` 对文件的访问权限进行控制，而文件结构体的初始化，则是由 `omode` 来完成，也就是说，进程想怎么来就怎么来，索引节点没有做任何权限处理，这里的 `readable` 和 `writable` 完全是由进程创建文件时指定的。
+2. 如果 1 成功了，那么接下来就分配文件结构体 `f` 对文件的访问权限进行控制，而文件结构体的初始化，则是由 `omode` 来完成，索引节点没有做任何权限处理，这里的 `readable` 和 `writable` 完全是由进程创建文件时指定的。
 3. `f->readable` 是设定比较难懂，`omode` 与 `O_WRONLY` 相与，如果 `omode` 包含 `O_WRONLY` 的话，那么得到的结果非零，取非后得到零。也就是说如果是只读，`f-readable` 为零，没毛病。
 4. `f->writable` 的值和 `O_WRONLY`、`O_RDWR` 有关，其中一个不为零即可。
 5. 这里可以发现 `O_RDONLY` 并没有用到。
