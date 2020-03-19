@@ -2,7 +2,7 @@
 title: 1. 运行环境和系统搭建（实验）
 ---
 
-XV6 是 MIT 设计的一个教学型操纵系统。XV6 可在 Intel X86 框架上运行，为了方便，建议将 XV6 运行在 QEMU 虚拟机器上，本人的实验环境是 ubuntu 18.04 。
+xv6 是 MIT 设计的一个教学型操纵系统。xv6 可在 Intel X86 框架上运行，为了方便，建议将 xv6 运行在 QEMU 虚拟机器上，本人的实验环境是 ubuntu 18.04 。
 
 ## 1. 安装系统
 
@@ -13,7 +13,7 @@ XV6 是 MIT 设计的一个教学型操纵系统。XV6 可在 Intel X86 框架�
    man qemu-system-i386       # 查看使用说明
    ```
 
-2. 下载 XV6 ，本人学习的版本是基于 X86 框架的 [xv6-rev11](https://github.com/mit-pdos/xv6-public/releases)，如果安装了 `git` 可以直接拉取我的仓库主分支。
+2. 下载 xv6 ，本人学习的版本是基于 X86 框架的 [xv6-rev11](https://github.com/mit-pdos/xv6-public/releases)，如果安装了 `git` 可以直接拉取我的仓库主分支。
 
    注意：下面的示例是用 SSH 拉取的，普通用户用 HTTPS 拉取我的仓库即可，毕竟没有我的密钥。
    
@@ -30,7 +30,7 @@ XV6 是 MIT 设计的一个教学型操纵系统。XV6 可在 Intel X86 框架�
    make qemu-nox              # 运行
    ```
 
-   运行上面的指令若没有出错就会进入 XV6 系统操作界面，显示信息如下：
+   运行上面的指令若没有出错就会进入 xv6 系统操作界面，显示信息如下：
 
    ```bash
    qemu-system-i386 -nographic -drive file=fs.img,index=1,media=disk,format=raw -drive file=xv6.img,index=0,media=disk,format=raw -smp 2 -m 512 
@@ -49,14 +49,17 @@ XV6 是 MIT 设计的一个教学型操纵系统。XV6 可在 Intel X86 框架�
 
    - 按 `q` 退出虚拟机器。
    - 输入 `info registers` 查看所有寄存器信息。
+   - 按 `ctrl + a`，再按 `c` 又回到 xv6 系统。
+   - 输入 `info mem` 显示映射的虚拟地址和权限。
+   - 输入 `info pg` 显示当前页表结构。
 
 5. 补充
 
-   XV6 也可以使用 `make qemu` 启动，此时会启动两个窗口。鼠标被捕捉后可以用 `Alt + Ctrl` 组合键解脱。
+   xv6 也可以使用 `make qemu` 启动，此时会启动两个窗口。鼠标被捕捉后可以用 `Alt + Ctrl` 组合键解脱。
 
 ## 2. 简单使用系统
 
-执行 `make qemu-nox` 进入 XV6 操作系统后，就可以使用系统了。XV6 实现了一小部分 Linux 系统上通用的命令，例如：
+执行 `make qemu-nox` 进入 xv6 操作系统后，就可以使用系统了。xv6 实现了一小部分 Linux 系统上通用的命令，例如：
 
 ```bash
 ls                        # 显示当前目录下的文件
