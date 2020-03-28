@@ -4,15 +4,15 @@ title: 1. 进程管理
 
 进程是操作系统的核心概念，通过进程抽象使得一个物理机（处理器核）被虚拟化成多个，每个进程可以独立拥有一个完整的处理机运行环境。进程抽象依赖于运行环境的切换：CPU 现场的保存与恢复。因此进程切换代码与处理器架构密切相关，也比较难以理解。
 
-我们先从进程管理角度分析 XV6，然后再讨论进程调度中的切换细节问题。
+我们先从进程管理角度分析 xv6，然后再讨论进程调度中的切换细节问题。
 
 ## 1. 调度状态与执行现场
 
-每次时钟中断都将进入到 XV6 内核代码，具体是 [trap()](https://github.com/professordeng/xv6-expansion/blob/master/trap.c#L35) 函数内部，完成 [IRQ_TIMER](https://github.com/professordeng/xv6-expansion/blob/master/trap.c#L103) 相关的处理，然后用 [yield()](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L384) 让当前进程让出 CPU（切换到其他就绪进程）。
+每次时钟中断都将进入到 xv6 内核代码，具体是 [trap()](https://github.com/professordeng/xv6-expansion/blob/master/trap.c#L35) 函数内部，完成 [IRQ_TIMER](https://github.com/professordeng/xv6-expansion/blob/master/trap.c#L103) 相关的处理，然后用 [yield()](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L384) 让当前进程让出 CPU（切换到其他就绪进程）。
 
 ### 1.1 进程控制块 PCB
 
-进程描述符 PCB 在 XV6 中是 [proc]([proc.h#L37](https://github.com/professordeng/xv6-expansion/blob/master/proc.h#L37)) 结构体。`proc` 结构体记录了： 
+进程描述符 PCB 在 xv6 中是 [proc]([proc.h#L37](https://github.com/professordeng/xv6-expansion/blob/master/proc.h#L37)) 结构体。`proc` 结构体记录了： 
 
 1. 有关进程组织的信息：`pid`（进程号）、`parent`（父进程）、`name[]`（进程名）。
 2. 进程运行状态信息：`state`（进程的运行调度状态）、`killed`（被撤销标志）。
@@ -20,11 +20,11 @@ title: 1. 进程管理
 4. 进程的内存映像的信息：`sz`（内存空间大小）、`pgdir`（页表首地址）、`kstack`（在 [allocproc()->kalloc()](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L94) 中分配）。
 5. 文件系统相关信息：`cwd`（当前工作目录）、`ofile[]`（已打开文件的列表）。
 
-从这里可以看到 XV6 的进程亲缘关系组织比 Linux 要简单得多，只有父进程关系，无法知道自己的子进程和兄弟进程。
+从这里可以看到 xv6 的进程亲缘关系组织比 Linux 要简单得多，只有父进程关系，无法知道自己的子进程和兄弟进程。
 
 进程的调度状态在 [procstate](https://github.com/professordeng/xv6-expansion/blob/master/proc.h#L35) 枚举类型变量中列出，分别是 `UNUSED`（未使用的 PCB）、`EMBRYO` （创建中，胚胎状态）、`SLEEPING`（睡眠阻塞中）、`RUNNABLE`（就绪状态）、 `RUNNING`（在 CPU 上运行）以及 `ZOMBIE`（僵尸态）。  
 
-后面我们会看到，XV6 使用固定大小的静态数组来记录 PCB，因此未使用的 PCB 必须标为 `UNUSED`，而且系统中创建的进程数受限于该数组的大小。而 Linux 系统则是动态生成 PCB， 并构成链表，因此进程撤销后最终连 PCB 也释放掉而无须 UNUSED 状态，而且进程数目的不会受限于某个静态数组的大小。 
+后面我们会看到，xv6 使用固定大小的静态数组来记录 PCB，因此未使用的 PCB 必须标为 `UNUSED`，而且系统中创建的进程数受限于该数组的大小。而 Linux 系统则是动态生成 PCB， 并构成链表，因此进程撤销后最终连 PCB 也释放掉而无须 UNUSED 状态，而且进程数目的不会受限于某个静态数组的大小。 
 
 ![process states](/xv6-book/img/state.png)
 
@@ -47,21 +47,21 @@ title: 1. 进程管理
 
 我们在 [执行断点](https://neuron.zone/xv6-book/2019/04/11/kernel.html#执行断点) 中已经了解过 ”系统调用 / 中断断点“ 和 ”切换断点“。这里所谓的内核执行线程，则是内核态 ”切换断点“ 的执行现场。
 
-在进程切换前要保存切出进程的内核态执行现场，并恢复切入进程的执行现场。由于进程切换都是发生在内核态的，而内核态的段寄存器都是相同的，因此无需保存段寄存器。EAX、ECX 和 EDX 也不需要保存，因为按照 X86 的调用约定是调用者保存，它们保存在该进程的内核堆栈中。ESP 也不需要保存，因为 [context](https://github.com/professordeng/xv6-expansion/blob/master/proc.h#L16) 本身就是堆栈栈顶位置，而进程控制块 PCB 中 `proc->context` 就是堆栈对应的位置。于是 XV6 中的进程内核断点执行现场 context 只有成员 `edi`、`esi`、`ebx`、`ebp`、`eip`。 
+在进程切换前要保存切出进程的内核态执行现场，并恢复切入进程的执行现场。由于进程切换都是发生在内核态的，而内核态的段寄存器都是相同的，因此无需保存段寄存器。EAX、ECX 和 EDX 也不需要保存，因为按照 X86 的调用约定是调用者保存，它们保存在该进程的内核堆栈中。ESP 也不需要保存，因为 [context](https://github.com/professordeng/xv6-expansion/blob/master/proc.h#L16) 本身就是堆栈栈顶位置，而进程控制块 PCB 中 `proc->context` 就是堆栈对应的位置。于是 xv6 中的进程内核断点执行现场 context 只有成员 `edi`、`esi`、`ebx`、`ebp`、`eip`。 
 
 例如，某进程用户态代码执行 `yield()` 系统调用而希望让出 CPU，本进程的内核堆栈中形成的 [trapframe](https://github.com/professordeng/xv6-expansion/blob/master/x86.h#L147)。然后随着内核代码的执行和函数调用的嵌套，形成更多层次的函数调用栈，直至 [swtch()](https://github.com/professordeng/xv6-expansion/blob/master/swtch.S#L9) 为止，最后在切换前在堆栈保存现场 context。
 
 ### 1.4 proc.h
 
-`proc.h` 文件中定义了 `cpu` 结构体，用于描述个处理器核；定义了全局变量 `cpus[NCPU]` 记录了全部处理器核的信息，以及全局变量 `ncpu` 用于记录处理器核数；声明了外部定义的两个 CPU 私有变量，`cpu` 用户获取自己所在的 CPU 核的指针，`proc` 变量用于获取当前正在运行的进程指 针；定义了 context 用于结构体，用于记录内核切换断点的现场；用于表示进程调度状态的枚举值 `procstate`；最后是描述 XV6 进程 PCB 的 `proc` 结构体。
+`proc.h` 文件中定义了 `cpu` 结构体，用于描述个处理器核；定义了全局变量 `cpus[NCPU]` 记录了全部处理器核的信息，以及全局变量 `ncpu` 用于记录处理器核数；声明了外部定义的两个 CPU 私有变量，`cpu` 用户获取自己所在的 CPU 核的指针，`proc` 变量用于获取当前正在运行的进程指 针；定义了 context 用于结构体，用于记录内核切换断点的现场；用于表示进程调度状态的枚举值 `procstate`；最后是描述 xv6 进程 PCB 的 `proc` 结构体。
 
 ### 1.5 proc.c
 
-[proc.c](https://github.com/professordeng/xv6-expansion/blob/master/proc.c) 是 XV6 进程管理的核心代码。包括一些全局性的变量，例如 [ptable](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L10) 结构体用于记录管理所 有进程，其中 `ptable.proc[NPROC]` 数组用于记录所有进程的 PCB；[initproc](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L15) 是 `init` 进程的 PCB。
+[proc.c](https://github.com/professordeng/xv6-expansion/blob/master/proc.c) 是 xv6 进程管理的核心代码。包括一些全局性的变量，例如 [ptable](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L10) 结构体用于记录管理所 有进程，其中 `ptable.proc[NPROC]` 数组用于记录所有进程的 PCB；[initproc](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L15) 是 `init` 进程的 PCB。
 
 ## 2. 进程控制
 
-XV6 中使用 `ptable` 中的静态数组 `ptable.proc[]` 来记录和组织进程。该数组最大可以记录 [NPROC](https://github.com/professordeng/xv6-expansion/blob/master/param.h#L1)）个数的进程，并且由 `lock` 自旋锁保护。该自旋锁通过 [pint()](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L23) 完成初始化（也是 `pint()` 的唯一用处）。 第一个进程的 PCB 由 [initproc](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L15)  指针变量指出。全局变量 [nextpid](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L17) 是下一个可用的进程号，并初始化为 1，XV6 对进程号不重复使用，单项递增，可能考虑到整数范围对 XV6 实验而言有足够大，因此简化此操作。
+xv6 中使用 `ptable` 中的静态数组 `ptable.proc[]` 来记录和组织进程。该数组最大可以记录 [NPROC](https://github.com/professordeng/xv6-expansion/blob/master/param.h#L1)）个数的进程，并且由 `lock` 自旋锁保护。该自旋锁通过 [pint()](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L23) 完成初始化（也是 `pint()` 的唯一用处）。 第一个进程的 PCB 由 [initproc](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L15)  指针变量指出。全局变量 [nextpid](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L17) 是下一个可用的进程号，并初始化为 1，xv6 对进程号不重复使用，单项递增，可能考虑到整数范围对 xv6 实验而言有足够大，因此简化此操作。
 
 ### 2.1 进程创建与撤销
 
@@ -71,17 +71,17 @@ XV6 中使用 `ptable` 中的静态数组 `ptable.proc[]` 来记录和组织进�
 
 然后在堆栈中分配 4 字节的 `trapret` 和 `context` 结构体，这样伪造成一个进程从用户态进入内核态的 `trapframe`，然后在伪造出进程切换断点在 context 中，这样就可以通过进程切换 “返回” 到进程应该执行的位置（例如可能是程序第一个指令，或者 `fork()` 之后的下一条指令）。 
 
-早期的 Linux 是将 PCB（`task_struct` 结构体）和内核堆栈放到一起，找到了进程控制块后根据固定偏移量也就找到了内核堆栈。后来的 Linux 堆栈也是和 PCB 分离的，类似于 XV6 这种 方式。
+早期的 Linux 是将 PCB（`task_struct` 结构体）和内核堆栈放到一起，找到了进程控制块后根据固定偏移量也就找到了内核堆栈。后来的 Linux 堆栈也是和 PCB 分离的，类似于 xv6 这种 方式。
 
 ### 2.2 第一个进程 initcode
 
-在 XV6 启动过程中 [userinit()](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L118) 创建第一个用户态进程 `initcode`。`userinit()` 将完成第一个用户进程 `init` 的创建工作。这个进程影像很快随着 `initcode` 的执行而通过 `exec()` 系统调用替换成磁盘上的 `/init` 进程影像，然后启动 `sh` 程序（如果 `sh` 程序结束，则再生成一个 `sh`）。 
+在 xv6 启动过程中 [userinit()](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L118) 创建第一个用户态进程 `initcode`。`userinit()` 将完成第一个用户进程 `init` 的创建工作。这个进程影像很快随着 `initcode` 的执行而通过 `exec()` 系统调用替换成磁盘上的 `/init` 进程影像，然后启动 `sh` 程序（如果 `sh` 程序结束，则再生成一个 `sh`）。 
 
 `userinit()` 首先执行 [allocproc()](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L126)，分配一个空闲的 PCB 并初始化相应的内核堆栈，并使用专门的全局指针 [initproc](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L15) 来记录这个进程。然后通过 [setupkvm()](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L129) 给 `init` 进程创建初始页表，由于只映射了内核空间因此函数名使用 `setupkvm()`，因此还没有用户态页表（不能访问用户态空间）。由于代码很短，只需要一个页就将代码数据和堆栈包含了，因此 `p->sz = PGSIZE`。
 
 接着通过 `inituvm()` 完成用户空间的建立，由于 `init` 的代码已经在内核影像 kernel 中，随着启动过程装载到 `_binary_initcode_start` 地址，因此只需要新分配一个页帧，然后将该页帧映射到 0 地址，再将 `init` 代码拷贝到该地址即可。
 
-然后到 [proc.c#L133](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L133)，自行（而不是因中断）设置了一个 `trapframe` 结构 `p->tf`，造成等效于 “好像曾经” 从用户态经过中断而形成的 `trapframe`，也就是说一旦利用这个 `trapframe` 进行 `iret` 返回，就会返回到设定好的 `init` 进程用户态断点处（伪造出来的断点），即 `eip` 指向的 0 地址，正是 `initcode` 的第一条指令位置。从这里可以看出，XV6 的进程布局与 Linux 安排不同，Linux 的进程入口第一条指令在 `0x40000` 附近。 
+然后到 [proc.c#L133](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L133)，自行（而不是因中断）设置了一个 `trapframe` 结构 `p->tf`，造成等效于 “好像曾经” 从用户态经过中断而形成的 `trapframe`，也就是说一旦利用这个 `trapframe` 进行 `iret` 返回，就会返回到设定好的 `init` 进程用户态断点处（伪造出来的断点），即 `eip` 指向的 0 地址，正是 `initcode` 的第一条指令位置。从这里可以看出，xv6 的进程布局与 Linux 安排不同，Linux 的进程入口第一条指令在 `0x40000` 附近。 
 
 最后设置进程名 `p->name` 为 `initcode`、修改当前工作目录为 `/`，并将进程调度状态设置为 `RUNNABLE`。 
 
@@ -95,7 +95,7 @@ XV6 中使用 `ptable` 中的静态数组 `ptable.proc[]` 来记录和组织进�
 
 父进程返回值为子进程 `pid`，而子进程的返回值为 0，因为子进程被调度的时候从根据 `trapframe` 的内容返回到 `fork()` 函数的下一条指令处往下继续运行。又因为 `eax` 被设置为 0，造成好像是子进程也执行了 `fork()` 代码并返回 0 的假象，实际上子进程直接就是从 `fork()` 后的下一条指令开始运行的。
 
-从 `fork()` 拷贝的资源来看，XV6 的进程资源相对于 Linux 来说要少的多，主要就是内存空间和所打开的文件。
+从 `fork()` 拷贝的资源来看，xv6 的进程资源相对于 Linux 来说要少的多，主要就是内存空间和所打开的文件。
 
 [forket()](https://github.com/professordeng/xv6-expansion/blob/master/proc.c#L394)
 
