@@ -15,10 +15,9 @@ xv6 是 MIT 设计的一个教学型操纵系统。xv6 可在 Intel X86 框架�
 
 2. 下载 xv6 ，本人学习的版本是基于 X86 框架的 [xv6-rev11](https://github.com/mit-pdos/xv6-public/releases)，如果安装了 `git` 可以直接拉取我的仓库主分支。
 
-   注意：下面的示例是用 SSH 拉取的，普通用户用 HTTPS 拉取我的仓库即可，毕竟没有我的密钥。
-   
    ```bash
-   git clone git@github.com:professordeng/xv6-expansion.git # 拉取代码
+   sudo apt-get install git   # 安装 git 工具
+   git clone https://github.com/professordeng/xv6-expansion.git # 拉取代码
    cd xv6-expansion     # 进入目录
    ```
    
