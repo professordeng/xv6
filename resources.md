@@ -2,6 +2,10 @@
 title: resources
 ---
 
+[首页](/) | [目录]({{site.baseurl}}) | [资源]({{site.baseurl}}/resources)
+
+---
+
 1. 课程网址 [6.828](https://pdos.csail.mit.edu/6.828/2018/schedule.html)
 2. 实验源码 [xv6-expansion](https://github.com/professordeng/xv6-expansion)，每一个大实验分配一个独立的分支，方便大家学习。
 3. 官方文档 [book-rev11.pdf](https://github.com/professordeng/xv6-book/tree/gh-pages/document)
